@@ -1,73 +1,50 @@
-# React + TypeScript + Vite
+# 擬似一眼体験アプリ
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+カメラの露出計算やプレビューを行うための、React製Webアプリケーションです。
 
-Currently, two official plugins are available:
+## 🚀 技術スタック
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Frontend:** React (TypeScript)
+- **Build Tool:** Vite
+- **Styling:** Tailwind CSS v4 (Alpha/Experimental)
+- **Package Manager:** pnpm
 
-## React Compiler
+## 🛠 セットアップ
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### 1. クローン
+```bash
+git clone https://github.com/Mackey4869/DSLR_experienceApp.git
+cd frontend
+```
+### 2. 依存関係のインストール
+```bash
+pnpm install
+```
+### 3. 開発サーバーの起動
+```bash
+pnpm dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 📂 ディレクトリ構造
+- **src/components/**: UIコンポーネント
+  - `Dial/`: 露出設定（F値など）を選択するダイヤルUI
+  - `Overlay/`: カメラ画面上に重なる情報表示（グリッドや設定値）
+  - `CameraView.tsx`: カメラ映像を表示するメインコンポーネント
+- **src/hooks/**: カスタムフック（ロジック）
+  - `useCamera.ts`: ブラウザのカメラデバイス起動・停止・制御
+  - `useExposure.ts`: 露出（F値・SS・ISO）の状態管理と計算ロジック
+- **src/utils/**: ユーティリティ
+  - `constants.ts`: F値の刻み、ISOリスト、シャッタースピード等の定数定義
+  - `exposureCalc.ts`: 露出値（EV）や各パラメーターの計算式
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## ✨ 主な機能（実装予定）
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+ - [ ] ブラウザからのカメラアクセスとリアルタイムプレビュー
+ - [ ] F値 / シャッタースピード / ISO 感度の手動シミュレーション
+ - [ ] 露出計のような最適な設定値の計算・表示
+
+## 🛠️ 開発メモ
+
+- **Tailwind CSS v4**: 最新の CSS-first な手法を採用。設定ファイルなしで動作させています。
+- **pnpm v10**: 高速なパッケージ管理。
+- **TypeScript**: 厳密な型定義により、露出計算などのロジックの安全性を確保。
