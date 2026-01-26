@@ -1,5 +1,12 @@
 import { useCallback } from "react";
-import { APERTURE_VALUES, ISO_VALUES, SHUTTER_VALUES, DEFAULT_APERTURE, DEFAULT_ISO, DEFAULT_SHUTTER } from "../utils/constants";
+import {
+	APERTURE_VALUES,
+	ISO_VALUES,
+	SHUTTER_VALUES,
+	DEFAULT_APERTURE,
+	// DEFAULT_ISO, // temporarily unused — commented out
+	DEFAULT_SHUTTER,
+} from "../utils/constants";
 import { evAtISO100, evForISO, brightnessMultiplierFromEV } from "../utils/exposureCalc";
 
 export function formatShutter(s: number) {
