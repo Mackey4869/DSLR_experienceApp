@@ -78,7 +78,8 @@ export default function useCamera(): UseCameraResult {
 	const [sensorSize] = useState("24x36");
 	const [bladeCount] = useState(9);
 
-	const [captured, setCaptured] = useState<any>(null);
+	// `setCaptured` is currently unused — keep captured state but omit setter
+	const [captured] = useState<any>(null);
 
 	const videoConstraints = useFacingMode ? BASE_VIDEO_CONSTRAINTS : { width: 1280, height: 720, aspectRatio: 2 / 3 };
 
