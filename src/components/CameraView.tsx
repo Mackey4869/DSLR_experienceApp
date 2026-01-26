@@ -1,70 +1,112 @@
-import React from "react";
+import React, { useState } from "react";
+import Webcam from "react-webcam";
+import useCamera from "../hooks/useCamera";
 
-// メインの映像表示（Canvasなど）
-// - Mobile-first レイアウト
-// - Safe area: env(safe-area-inset-top/bottom) をパディングに使用
-// - プレビューはアスペクト比 2:3、幅いっぱい表示
-// - アイコンは Lucide React 等を使う想定でコメントで配置
-
+// UI 層: レイアウトとコントロールのみを担当。カメラ制御は hook に移譲。
 const CameraView: React.FC = () => {
+	const {
+		webcamRef,
+		isCameraOn,
+		startCamera,
+		stopCamera,
+		handleCapture,
+		videoConstraints,
+		onUserMedia,
+		onUserMediaError,
+		computeFilter,
+		captured,
+		settings,
+		setIso,
+		setAperture,
+		setShutterSpeed,
+		APERTURE_VALUES,
+		ISO_VALUES,
+		SHUTTER_VALUES,
+	} = useCamera();
+
+	const [notice, setNotice] = useState("");
+
 	return (
-		<div className="h-[calc(100svh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] bg-black pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] flex flex-col justify-between items-center text-white box-border">
-			{/* カメラプレビュー領域（アスペクト比 2:3） */}
-			<div className="w-full max-w-[60vw] mx-auto aspect-[2/3] bg-gray-900 flex-shrink-0 flex items-center justify-center overflow-hidden">
-				{/* プレースホルダー（実装時は video/canvas をここに入れる） */}
-				<div className="w-11/12 h-11/12 max-w-[320px] bg-gray-800 rounded-md overflow-hidden">
-					{/* 実装時はここに <video> または <canvas> を入れてください。
-					   例: <video className="w-full h-full object-cover" autoPlay muted playsInline /> */}
-					<div className="w-full h-full flex items-center justify-center">
-						<div className="text-gray-300/90 text-sm">カメラプレビュー</div>
-					</div>
+		<div className="min-h-[100svh] w-full flex flex-col items-center text-white" style={{ background: 'linear-gradient(180deg,#0e0f10,#191a1b)' }}>
+			{/* Top menu */}
+			<div className="w-full flex items-center justify-between" style={{ height: '3.2rem' }}>
+				<div className="flex items-center gap-3" style={{ paddingLeft: '0.5rem' }}>
+					<a href="/" className="text-sm text-white/90">Home</a>
+					<a href="/camera" className="text-sm text-white/90">Camera</a>
 				</div>
-			</div>
-
-			{/* 下部 UI エリア */}
-			<div className="w-full px-6 py-4 flex flex-col items-center gap-4">
-				{/* 露出設定プレースホルダー */}
-				<div className="w-full max-w-md flex justify-between text-white/90">
-					<div className="flex flex-col items-center">
-						<span className="text-xs text-gray-400">F</span>
-						<span className="text-sm">2.8</span>
-					</div>
-					<div className="flex flex-col items-center">
-						<span className="text-xs text-gray-400">SS</span>
-						<span className="text-sm">1/125</span>
-					</div>
-					<div className="flex flex-col items-center">
-						<span className="text-xs text-gray-400">ISO</span>
-						<span className="text-sm">100</span>
-					</div>
-				</div>
-
-				{/* シャッターボタン */}
-				<div className="w-full flex justify-center">
-					<button
-						aria-label="シャッター"
-						className="w-20 h-20 rounded-full bg-white/6 border-2 border-white/12 flex items-center justify-center"
-					>
-						<div className="w-12 h-12 rounded-full bg-white" />
+				<div style={{ paddingRight: '0.5rem' }}>
+					<button onClick={() => (isCameraOn ? stopCamera() : startCamera())} className="bg-white text-black px-3 py-1 rounded text-sm">
+						{isCameraOn ? 'Camera Off' : 'Camera On'}
 					</button>
 				</div>
+			</div>
 
-				{/* 下部アイコン / 操作エリア（プレースホルダー） */}
-				<div className="w-full max-w-md flex justify-between text-sm text-gray-400">
-					<div className="flex items-center gap-2">
-						{/* アイコン: <Flash /> */}
-						<span>フラッシュ</span>
-					</div>
-					<div className="flex items-center gap-2">
-						{/* アイコン: <Settings /> */}
-						<span>設定</span>
-					</div>
-					<div className="flex items-center gap-2">
-						{/* アイコン: <CameraOff /> or <SwitchCamera /> */}
-						<span>カメラ切替</span>
-					</div>
+			{/* Camera preview area (2:3 aspect) */}
+			<div className="w-[80%] max-w-[360px] mt-1" style={{ aspectRatio: '2 / 3', position: 'relative' }}>
+				<div className="absolute inset-0 rounded-md overflow-hidden border" style={{ borderColor: '#222', background: '#000' }}>
+					{isCameraOn ? (
+						<Webcam
+							ref={webcamRef}
+							audio={false}
+							screenshotFormat="image/jpeg"
+							videoConstraints={videoConstraints}
+							mirrored={false}
+							className="w-full h-full object-cover"
+							style={{ filter: computeFilter() }}
+							playsInline
+							onUserMedia={onUserMedia}
+							onUserMediaError={onUserMediaError}
+						/>
+					) : (
+						<div className="w-full h-full flex items-center justify-center text-gray-400">Camera Off</div>
+					)}
+				</div>
+				{/* small overlay info */}
+				<div style={{ position: 'absolute', left: '4%', bottom: '6%', width: '92%', display: 'flex', justifyContent: 'space-around', color: '#ffd54f', fontFamily: 'monospace', fontSize: '0.8rem' }}>
+					<span>F{settings.aperture.toFixed(1)}</span>
+					<span>SS 1/{Math.round(1 / settings.shutterSpeed)}</span>
+					<span>ISO {settings.iso}</span>
 				</div>
 			</div>
+
+			{/* Controls: sliders above capture button */}
+			<div className="w-[80%] max-w-[360px] flex flex-col items-center mt-2" style={{ gap: '0.3rem' }}>
+				<div className="w-full flex justify-between items-center" style={{ gap: '0.3rem' }}>
+					<div className="text-white text-xs">F</div>
+					{APERTURE_VALUES && (
+						<input className="flex-1" type="range" min={0} max={APERTURE_VALUES.length - 1} step={1} value={Math.max(0, APERTURE_VALUES.indexOf(settings.aperture))} onChange={e => setAperture(APERTURE_VALUES[Number(e.target.value)])} style={{ accentColor: '#ff3b30' }} />
+					)}
+				</div>
+				<div className="w-full flex justify-between items-center" style={{ gap: '0.3rem' }}>
+					<div className="text-white text-xs">SS</div>
+					{SHUTTER_VALUES && (
+						<input className="flex-1" type="range" min={0} max={SHUTTER_VALUES.length - 1} step={1} value={Math.max(0, SHUTTER_VALUES.indexOf(settings.shutterSpeed))} onChange={e => setShutterSpeed(SHUTTER_VALUES[Number(e.target.value)])} style={{ accentColor: '#ff3b30' }} />
+					)}
+				</div>
+				<div className="w-full flex justify-between items-center" style={{ gap: '0.3rem' }}>
+					<div className="text-white text-xs">ISO</div>
+					{ISO_VALUES && (
+						<input className="flex-1" type="range" min={0} max={ISO_VALUES.length - 1} step={1} value={Math.max(0, ISO_VALUES.indexOf(settings.iso))} onChange={e => setIso(ISO_VALUES[Number(e.target.value)])} style={{ accentColor: '#ff3b30' }} />
+					)}
+				</div>
+			</div>
+
+			{/* Capture button area at bottom */}
+			{notice && (
+				<div style={{ width: '100%', textAlign: 'center', marginBottom: '0.4rem' }}>
+					<span className="text-sm text-white/90">{notice}</span>
+				</div>
+			)}
+			<div className="w-full flex items-center justify-center" style={{ height: '3.8rem', marginTop: 'auto', marginBottom: '0.6rem' }}>
+				<button onClick={() => { setNotice('保存機能はこれから実装します'); setTimeout(() => setNotice(''), 1800); handleCapture(); }} aria-label="capture" title="Capture" style={{ width: '3.2rem', height: '3.2rem', borderRadius: '9999px', background: 'radial-gradient(circle at 30% 30%, #ffd54f, #ffb300)', border: '3px solid #fff', opacity: 0.6 }} />
+			</div>
+
+			{/* last capture preview (small) */}
+			{captured && (
+				<div className="w-[80%] max-w-[360px] mb-2" style={{ textAlign: 'center' }}>
+					<img src={captured.image} alt="capture" style={{ width: '5.2rem', height: 'auto', border: '1px solid #333' }} />
+				</div>
+			)}
 		</div>
 	);
 };
