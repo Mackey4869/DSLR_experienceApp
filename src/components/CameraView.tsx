@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import Webcam from "react-webcam";
 import useCamera from "../hooks/useCamera";
+import { applyApertureEffects } from "../utils/imageEffects";
 
 // UI 層: レイアウトとコントロールのみを担当。カメラ制御は hook に移譲。
 const CameraView: React.FC = () => {
@@ -14,6 +15,7 @@ const CameraView: React.FC = () => {
 		onUserMedia,
 		onUserMediaError,
 		computeFilter,
+		computeBrightness,
 		captured,
 		settings,
 		setIso,
@@ -23,6 +25,53 @@ const CameraView: React.FC = () => {
 		ISO_VALUES,
 		SHUTTER_VALUES,
 	} = useCamera();
+
+	const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+	// store last tap in video pixel coordinates; if null use center
+	const lastTapRef = useRef<{ x: number; y: number } | null>(null);
+
+	// processing scale: reduce internal canvas resolution for performance (0.0-1.0)
+	const PROCESS_SCALE = 0.5;
+
+	useEffect(() => {
+		let mounted = true;
+		let timer: number | null = null;
+
+		async function processFrame() {
+			try {
+				const video = (webcamRef.current as any)?.video as HTMLVideoElement | undefined;
+				const canvas = overlayCanvasRef.current;
+				if (!video || !canvas) return;
+
+				// ensure canvas internal size matches scaled video size
+				const vw = video.videoWidth || Math.max(1, video.clientWidth);
+				const vh = video.videoHeight || Math.max(1, video.clientHeight);
+				const cw = Math.max(1, Math.floor(vw * PROCESS_SCALE));
+				const ch = Math.max(1, Math.floor(vh * PROCESS_SCALE));
+				if (canvas.width !== cw || canvas.height !== ch) {
+					canvas.width = cw;
+					canvas.height = ch;
+				}
+
+				const tap = lastTapRef.current;
+				const tx = tap ? tap.x : vw / 2;
+				const ty = tap ? tap.y : vh / 2;
+				const sx = canvas.width / vw;
+				const sy = canvas.height / vh;
+				const brightness = computeBrightness(settings.aperture, settings.shutterSpeed, settings.iso);
+				await applyApertureEffects(video, canvas, tx * sx, ty * sy, settings.aperture, settings.bladeCount, brightness);
+			} catch (e) {
+				console.warn('processFrame failed', e);
+			}
+			if (!mounted) return;
+			// schedule next run (throttle to ~3fps)
+			timer = window.setTimeout(() => { requestAnimationFrame(processFrame); }, 330);
+		}
+
+		if (isCameraOn) processFrame();
+		return () => { mounted = false; if (timer) clearTimeout(timer); };
+	}, [isCameraOn, settings.aperture, settings.bladeCount, settings.iso, settings.shutterSpeed, computeBrightness]);
 
 	const [notice, setNotice] = useState("");
 
@@ -45,18 +94,47 @@ const CameraView: React.FC = () => {
 			<div className="w-[80%] max-w-[360px] mt-1" style={{ aspectRatio: '2 / 3', position: 'relative' }}>
 				<div className="absolute inset-0 rounded-md overflow-hidden border" style={{ borderColor: '#222', background: '#000' }}>
 					{isCameraOn ? (
-						<Webcam
-							ref={webcamRef}
-							audio={false}
-							screenshotFormat="image/jpeg"
-							videoConstraints={videoConstraints}
-							mirrored={false}
-							className="w-full h-full object-cover"
-							style={{ filter: computeFilter() }}
-							playsInline
-							onUserMedia={onUserMedia}
-							onUserMediaError={onUserMediaError}
-						/>
+						<>
+							<Webcam
+								ref={webcamRef}
+								audio={false}
+								screenshotFormat="image/jpeg"
+								videoConstraints={videoConstraints}
+								mirrored={false}
+								className="w-full h-full object-cover"
+								style={{ filter: computeFilter() }}
+								playsInline
+								onUserMedia={onUserMedia}
+								onUserMediaError={onUserMediaError}
+							/>
+							{/* overlay canvas for processed preview */}
+							<canvas
+								ref={overlayCanvasRef}
+								className="absolute inset-0 w-full h-full"
+								style={{ width: '100%', height: '100%', position: 'absolute', left: 0, top: 0, pointerEvents: 'auto' }}
+								onClick={async (ev) => {
+									try {
+										const video = (webcamRef.current as any)?.video as HTMLVideoElement | undefined;
+										const canvas = overlayCanvasRef.current;
+										if (!video || !canvas) return;
+										// compute click pos relative to element and scale to video pixels
+										const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+										const clickX = ev.clientX - rect.left;
+										const clickY = ev.clientY - rect.top;
+										// scale to video natural size
+										const sx = video.videoWidth / rect.width;
+										const sy = video.videoHeight / rect.height;
+										const tx = clickX * sx;
+										const ty = clickY * sy;
+										lastTapRef.current = { x: tx, y: ty };
+										const brightness = computeBrightness(settings.aperture, settings.shutterSpeed, settings.iso);
+										await applyApertureEffects(video, canvas, tx, ty, settings.aperture, settings.bladeCount, brightness);
+									} catch (e) {
+										console.warn('apply effects failed', e);
+									}
+								}}
+							/>
+						</>
 					) : (
 						<div className="w-full h-full flex items-center justify-center text-gray-400">Camera Off</div>
 					)}
