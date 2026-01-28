@@ -11,6 +11,7 @@ type UseCameraResult = {
 	onUserMedia: () => void;
 	onUserMediaError: (err: any) => void;
 	computeFilter: () => string;
+		computeBrightness: (aperture: number, shutter: number, iso: number) => number;
 	captured: any;
 	settings: {
 		iso: number;
@@ -152,6 +153,7 @@ export default function useCamera(): UseCameraResult {
 		onUserMedia,
 		onUserMediaError,
 		computeFilter,
+		computeBrightness,
 		captured,
 		settings: { iso, shutterSpeed, aperture, sensorSize, bladeCount },
 		setIso,
