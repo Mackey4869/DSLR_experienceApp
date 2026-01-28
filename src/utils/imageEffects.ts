@@ -83,6 +83,73 @@ export function applyStarburstOnCanvas(outCanvas: HTMLCanvasElement, aperture: n
     ctx.restore();
 }
 
+// Apply film-like luminance noise on a canvas. Strength scales with ISO.
+export function applyFilmGrainOnCanvas(outCanvas: HTMLCanvasElement, iso: number, intensity = 1) {
+    const w = outCanvas.width;
+    const h = outCanvas.height;
+    if (w === 0 || h === 0) return;
+    const ctx = outCanvas.getContext('2d')!;
+
+    const imgData = ctx.getImageData(0, 0, w, h);
+    // Map ISO to a noise strength in [0,1]. Reach full strength around ISO 800.
+    const isoRatio = Math.max(1, iso / 100);
+    const strength = Math.min(1, Math.log2(isoRatio) / 3) * intensity;
+    if (strength <= 0) return;
+
+    // amplitude in luminance units (0-255). Tuned to be subtle at lower strengths.
+    const amplitude = 30 * strength;
+
+    // Simple combined luminance noise: add same delta to R/G/B to keep it mostly luminance.
+    for (let i = 0; i < imgData.data.length; i += 4) {
+        // generate centered random in [-0.5,0.5]
+        const r = (Math.random() - 0.5) * 2;
+        const delta = r * amplitude;
+        imgData.data[i] = Math.min(255, Math.max(0, imgData.data[i] + delta));
+        imgData.data[i + 1] = Math.min(255, Math.max(0, imgData.data[i + 1] + delta));
+        imgData.data[i + 2] = Math.min(255, Math.max(0, imgData.data[i + 2] + delta));
+        // keep alpha
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+}
+
+// Apply light chrominance (color) noise. Visible more in darker regions and scales with ISO.
+export function applyColorNoiseOnCanvas(outCanvas: HTMLCanvasElement, iso: number, intensity = 0.3) {
+    const w = outCanvas.width;
+    const h = outCanvas.height;
+    if (w === 0 || h === 0) return;
+    const ctx = outCanvas.getContext('2d')!;
+
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const isoRatio = Math.max(1, iso / 100);
+    // Chrominance strength grows slower than luminance; tuned to be light by default.
+    const strength = Math.min(1, Math.log2(isoRatio) / 4) * intensity;
+    if (strength <= 0) return;
+
+    // max color shift per channel (in RGB units). small value to keep it subtle.
+    const maxShift = 18 * strength;
+
+    for (let i = 0; i < imgData.data.length; i += 4) {
+        const r = imgData.data[i];
+        const g = imgData.data[i + 1];
+        const b = imgData.data[i + 2];
+        // luminance normalized 0..1
+        const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        const darkFactor = 1 - lum; // more noise in dark areas
+
+        // small independent noise for R and B, G slightly less to keep color balance
+        const rn = (Math.random() - 0.5) * 2 * maxShift * darkFactor;
+        const bn = (Math.random() - 0.5) * 2 * maxShift * darkFactor;
+        const gn = (Math.random() - 0.5) * 2 * (maxShift * 0.5) * darkFactor;
+
+        imgData.data[i] = Math.min(255, Math.max(0, r + rn));
+        imgData.data[i + 1] = Math.min(255, Math.max(0, g + gn));
+        imgData.data[i + 2] = Math.min(255, Math.max(0, b + bn));
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+}
+
 // Convenience: capture from video, apply DOF and starburst and draw on outCanvas
 export async function applyApertureEffects(video: HTMLVideoElement, outCanvas: HTMLCanvasElement, tapX: number, tapY: number, aperture: number, bladeCount: number, brightnessMultiplier = 1) {
     await applyDepthOfFieldFromVideo(video, outCanvas, tapX, tapY, aperture, brightnessMultiplier);

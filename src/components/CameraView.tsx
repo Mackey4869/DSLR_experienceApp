@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from "react";
 import Webcam from "react-webcam";
 import useCamera from "../hooks/useCamera";
-import { applyApertureEffects } from "../utils/imageEffects";
+import { applyApertureEffects, applyFilmGrainOnCanvas, applyColorNoiseOnCanvas } from "../utils/imageEffects";
 
 // UI 層: レイアウトとコントロールのみを担当。カメラ制御は hook に移譲。
 const CameraView: React.FC = () => {
@@ -61,6 +61,10 @@ const CameraView: React.FC = () => {
 				const sy = canvas.height / vh;
 				const brightness = computeBrightness(settings.aperture, settings.shutterSpeed, settings.iso);
 				await applyApertureEffects(video, canvas, tx * sx, ty * sy, settings.aperture, settings.bladeCount, brightness);
+				// apply film-like luminance noise depending on ISO
+				applyFilmGrainOnCanvas(canvas, settings.iso);
+				// add light color noise (chrominance)
+				applyColorNoiseOnCanvas(canvas, settings.iso, 0.28);
 			} catch (e) {
 				console.warn('processFrame failed', e);
 			}
@@ -129,6 +133,10 @@ const CameraView: React.FC = () => {
 										lastTapRef.current = { x: tx, y: ty };
 										const brightness = computeBrightness(settings.aperture, settings.shutterSpeed, settings.iso);
 										await applyApertureEffects(video, canvas, tx, ty, settings.aperture, settings.bladeCount, brightness);
+										// apply film-like luminance noise depending on ISO
+										applyFilmGrainOnCanvas(canvas, settings.iso);
+										// add light color noise (chrominance)
+										applyColorNoiseOnCanvas(canvas, settings.iso, 0.28);
 									} catch (e) {
 										console.warn('apply effects failed', e);
 									}
