@@ -81,17 +81,11 @@ const CameraView: React.FC = () => {
 
 	return (
 		<div className="min-h-[100svh] w-full flex flex-col items-center text-white" style={{ background: 'linear-gradient(180deg,#0e0f10,#191a1b)' }}>
-			{/* Top menu */}
-			<div className="w-full flex items-center justify-between" style={{ height: '3.2rem' }}>
-				<div className="flex items-center gap-3" style={{ paddingLeft: '0.5rem' }}>
-					<a href="/" className="text-sm text-white/90">Home</a>
-					<a href="/camera" className="text-sm text-white/90">Camera</a>
-				</div>
-				<div style={{ paddingRight: '0.5rem' }}>
-					<button onClick={() => (isCameraOn ? stopCamera() : startCamera())} className="bg-white text-black px-3 py-1 rounded text-sm">
-						{isCameraOn ? 'Camera Off' : 'Camera On'}
-					</button>
-				</div>
+			{/* Top menu (no navigation links) */}
+			<div className="w-full flex items-center justify-end" style={{ height: '3.2rem', paddingRight: '0.5rem' }}>
+				<button onClick={() => (isCameraOn ? stopCamera() : startCamera())} className="bg-white text-black px-3 py-1 rounded text-sm">
+					{isCameraOn ? 'Camera Off' : 'Camera On'}
+				</button>
 			</div>
 
 			{/* Camera preview area (2:3 aspect) */}
