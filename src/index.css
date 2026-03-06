@@ -1,1 +1,72 @@
 @import "tailwindcss";
+
+/* Phone frame styles for large screens */
+.phone-wrapper {
+	width: 100%;
+	min-height: 100vh;
+}
+
+/* デスクトップ等大きめの表示でスマホ風フレームを中央表示 */
+@media (min-width: 900px) {
+	.phone-container {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 100vh;
+		padding: 4rem;
+		background: radial-gradient(1200px 600px at 50% 10%, rgba(255,255,255,0.02), transparent 15%);
+	}
+
+	.phone-bezel {
+		width: 390px; /* 指定の表示サイズ */
+		height: 844px; /* 指定の表示サイズ */
+		border-radius: 40px;
+		background: #0b0b0b;
+		padding: 6px; /* パディングを小さく */
+		box-shadow: 0 30px 80px rgba(2,6,23,0.7), inset 0 1px 0 rgba(255,255,255,0.02);
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		box-sizing: border-box;
+	}
+
+	.phone-notch {
+		width: 140px;
+		height: 24px;
+		background: #070707;
+		border-radius: 12px;
+		margin: 6px auto 8px auto;
+		box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+	}
+
+	.phone-screen {
+		flex: 1 1 auto;
+		background: transparent;
+		overflow: hidden;
+		border-radius: 22px;
+		display: block;
+		box-sizing: border-box;
+	}
+
+	/* 中のアプリルート要素はフレーム幅に合わせて中央揃え */
+	.phone-screen > * {
+		width: 100%;
+		height: 100%;
+		box-sizing: border-box;
+		margin: 0 auto;
+		overflow: auto;
+	}
+
+	.phone-home {
+		height: 8px;
+		width: 120px;
+		background: rgba(255,255,255,0.06);
+		border-radius: 999px;
+		margin: 10px auto 0 auto;
+	}
+}
+
+/* 小さい画面では通常のレスポンシブ表示を維持 */
+@media (max-width: 899px) {
+	.phone-screen > * { width: 100%; height: auto; }
+}
