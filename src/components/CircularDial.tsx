@@ -24,14 +24,26 @@ export default function CircularDial({
   const [displayDeg, setDisplayDeg] = useState(0);
   const dialRef = useRef<HTMLDivElement>(null);
 
+  // virtual position in steps (can go beyond bounds for visual rotation)
+  const virtualPosRef = useRef<number>(0);
+  // remember last logical index to detect changes
+  const lastLogicalRef = useRef<number>(0);
+  // last move sign for detecting reversal
+  const lastMoveSignRef = useRef<number>(0);
+
   const currentIndex = Math.max(0, values.indexOf(value));
-  const anglePerStep = 360 / values.length;
+  const anglePerStep = 360 / values.length; // visual rotation per logical value
   const currentAngle = currentIndex * anglePerStep;
+  const TICK_COUNT = 12; // fixed number of ticks to display
+  const anglePerTick = 360 / TICK_COUNT;
 
   useEffect(() => {
     // initialize visual rotation to current value once
     setRotationDeg(currentAngle);
     setDisplayDeg(currentAngle);
+    // initialize virtual pos and last logical
+    virtualPosRef.current = currentIndex;
+    lastLogicalRef.current = currentIndex;
     // we intentionally do not re-sync on later prop changes so the dial
     // can be rotated freely; numeric value is still clamped.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -59,21 +71,45 @@ export default function CircularDial({
     if (deltaAngle < -Math.PI) deltaAngle += 2 * Math.PI;
     const deltaDeg = (deltaAngle * 180) / Math.PI;
 
-    setRotationDeg((prevRot) => {
-      const newRot = prevRot + deltaDeg;
-      const stepPos = Math.round(newRot / anglePerStep);
-      const clampedIndex = Math.max(0, Math.min(values.length - 1, stepPos));
-      // while dragging, reflect finger movement immediately
-      setDisplayDeg(newRot);
-      if (clampedIndex !== currentIndex) {
-        // defer parent update to avoid setState during render
-        Promise.resolve().then(() => {
-          try { onChange(values[clampedIndex] as number); } catch (e) {}
-          try { if (typeof navigator !== 'undefined' && 'vibrate' in navigator) (navigator as any).vibrate(8); } catch (e) {}
-        });
-      }
-      return newRot;
-    });
+    // compute delta in steps
+    const deltaSteps = deltaDeg / anglePerStep;
+    // update virtual position (float)
+    virtualPosRef.current = virtualPosRef.current + deltaSteps;
+
+    // update visual rotation (allow continuous rotation)
+    const newRot = virtualPosRef.current * anglePerStep;
+    setRotationDeg(newRot);
+    setDisplayDeg(newRot);
+
+    // determine candidate logical index
+    const rawRounded = Math.round(virtualPosRef.current);
+    const maxIndex = values.length - 1;
+    let candidate = Math.max(0, Math.min(maxIndex, rawRounded));
+
+    const moveSign = Math.sign(deltaSteps) || 0;
+    // detect reversal when previously clamped
+    if (lastLogicalRef.current === maxIndex && rawRounded > maxIndex && moveSign < 0) {
+      // reversed after hitting max -> nudge virtual pos slightly inside so value steps immediately
+      virtualPosRef.current = maxIndex - 0.6;
+      candidate = maxIndex - 1;
+    } else if (lastLogicalRef.current === 0 && rawRounded < 0 && moveSign > 0) {
+      // reversed after hitting min -> nudge inside
+      virtualPosRef.current = 0.6;
+      candidate = 1;
+    }
+
+    // if within bounds normally, candidate will be proper
+    if (candidate !== lastLogicalRef.current) {
+      lastLogicalRef.current = candidate;
+      // notify parent
+      Promise.resolve().then(() => {
+        try { onChange(values[candidate] as number); } catch (e) {}
+        try { if (typeof navigator !== 'undefined' && 'vibrate' in navigator) (navigator as any).vibrate(8); } catch (e) {}
+      });
+    }
+
+    // remember last move sign
+    if (moveSign !== 0) lastMoveSignRef.current = moveSign;
 
     setStartAngle(angle);
   };
@@ -81,17 +117,18 @@ export default function CircularDial({
   const handleEnd = () => {
     setIsDragging(false);
     // snap to nearest step when releasing
-    setRotationDeg((prevRot) => {
-      const stepPos = Math.round(prevRot / anglePerStep);
-      const clampedIndex = Math.max(0, Math.min(values.length - 1, stepPos));
-      const snappedDeg = stepPos * anglePerStep;
-      setDisplayDeg(snappedDeg);
-      // sync rotation to snapped angle
-      Promise.resolve().then(() => {
-        try { if (clampedIndex !== currentIndex) onChange(values[clampedIndex] as number); } catch (e) {}
-        try { if (typeof navigator !== 'undefined' && 'vibrate' in navigator) (navigator as any).vibrate(10); } catch (e) {}
-      });
-      return snappedDeg;
+    // snap virtual position to nearest valid index and align visuals
+    const maxIndex = values.length - 1;
+    let snapIndex = Math.round(virtualPosRef.current);
+    snapIndex = Math.max(0, Math.min(maxIndex, snapIndex));
+    virtualPosRef.current = snapIndex;
+    const snappedDeg = snapIndex * anglePerStep;
+    setRotationDeg(snappedDeg);
+    setDisplayDeg(snappedDeg);
+    lastLogicalRef.current = snapIndex;
+    Promise.resolve().then(() => {
+      try { if (snapIndex !== currentIndex) onChange(values[snapIndex] as number); } catch (e) {}
+      try { if (typeof navigator !== 'undefined' && 'vibrate' in navigator) (navigator as any).vibrate(10); } catch (e) {}
     });
   };
 
@@ -123,7 +160,7 @@ export default function CircularDial({
     <div className="flex flex-col items-center">
       <div
         ref={dialRef}
-        className="relative w-24 h-24 cursor-grab active:cursor-grabbing select-none"
+        className="relative w-32 h-32 cursor-grab active:cursor-grabbing select-none"
         style={{ touchAction: 'none', WebkitUserSelect: 'none' as any }}
         onMouseDown={(e) => handleStart(e.clientX, e.clientY)}
         onTouchStart={(e) => {
@@ -135,22 +172,31 @@ export default function CircularDial({
 
         <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
           <g transform={`rotate(${displayDeg},50,50)`}>
-            {values.map((_, index) => {
-              const angle = (index * anglePerStep - 90) * (Math.PI / 180);
+            {Array.from({ length: TICK_COUNT }).map((_, ti) => {
+              const angle = (ti * anglePerTick - 90) * (Math.PI / 180);
               const x1 = 50 + 36 * Math.cos(angle);
               const y1 = 50 + 36 * Math.sin(angle);
               const x2 = 50 + 42 * Math.cos(angle);
               const y2 = 50 + 42 * Math.sin(angle);
-              const isActive = index === currentIndex;
+              // map logical current position (or virtual pos) to tick index (0..TICK_COUNT-1)
+              const virtualPos = virtualPosRef.current ?? currentIndex;
+              // allow ISO mode to occupy 2 ticks per logical value
+              const isIso = String(label).toLowerCase().includes('iso');
+              const ticksPerValue = (TICK_COUNT / values.length) * (isIso ? 2 : 1);
+              let tickIndex = Math.round(virtualPos * ticksPerValue);
+              tickIndex = Math.max(0, Math.min(TICK_COUNT - 1, tickIndex));
+              // use uniform gray ticks (no red active tick)
+              const stroke = '#52525b';
+              const strokeWidth = '1';
               return (
                 <line
-                  key={index}
+                  key={ti}
                   x1={x1}
                   y1={y1}
                   x2={x2}
                   y2={y2}
-                  stroke={isActive ? '#ef4444' : '#52525b'}
-                  strokeWidth={isActive ? '2.2' : '1'}
+                  stroke={stroke}
+                  strokeWidth={strokeWidth}
                   strokeLinecap="round"
                 />
               );
