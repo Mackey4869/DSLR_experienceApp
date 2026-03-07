@@ -210,7 +210,9 @@ const CameraView: React.FC = () => {
 			<div style={{ position: 'absolute', right: 48, bottom: 28, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
 				{/* add space above the shutter button */}
 				<div style={{ height: 48 }} />
-				<button onClick={() => { setNotice('保存機能はこれから実装します'); setTimeout(() => setNotice(''), 1800); handleCapture(); }} aria-label="capture" title="Capture" style={{ width: 76, height: 76, borderRadius: 9999, background: 'radial-gradient(circle at 30% 30%, #ffffff, #ffffff)', border: '4px solid #fff', opacity: 0.98 }} />
+				<button onClick={() => { setNotice('保存機能はこれから実装します'); setTimeout(() => setNotice(''), 1800); handleCapture(); }} aria-label="capture" title="Capture" style={{ width: 76, height: 76, borderRadius: 9999, background: 'radial-gradient(circle at 30% 30%, #ffffff, #ffffff)', border: '4px solid #fff', opacity: 0.98, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+					<span className="material-symbols-outlined" style={{ fontSize: '2rem', lineHeight: 1, color: '#111' }}>photo_camera</span>
+				</button>
 			</div>
 
 			{/* notice and last capture preview remain at bottom center (small) */}
