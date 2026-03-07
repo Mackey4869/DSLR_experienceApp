@@ -49,6 +49,28 @@ export default function CircularDial({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const formatDisplay = (v: string | number) => {
+    if (typeof v === 'string') return v + (unit || '');
+    const lab = String(label).toLowerCase();
+    const isShutter = lab.includes('ss') || lab.includes('shutter') || lab.includes('sec');
+    if (isShutter) {
+      if (v >= 1) {
+        // integer seconds -> show with double-quote unless unit provided
+        const secStr = Number.isInteger(v) ? String(v) : String(v);
+        return unit ? secStr + unit : secStr + '"';
+      }
+      // fractional seconds -> try to show as reciprocal (1/4, 1/8...)
+      if (v > 0) {
+        const recip = Math.round(1 / v);
+        if (Math.abs(1 / v - recip) < 1e-6 && recip > 0 && recip <= 10000) {
+          return `1/${recip}`;
+        }
+      }
+      return String(v) + (unit || '');
+    }
+    return String(v) + (unit || '');
+  };
+
   const handleStart = (clientX: number, clientY: number) => {
     if (!dialRef.current) return;
     const rect = dialRef.current.getBoundingClientRect();
@@ -204,8 +226,10 @@ export default function CircularDial({
           </g>
         </svg>
 
-        <div className="absolute inset-0 m-auto w-10 h-10 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 shadow-inner flex items-center justify-center pointer-events-none">
-          <div className="w-6 h-6 rounded-full bg-zinc-900 border border-zinc-600" />
+        <div className="absolute inset-0 m-auto w-14 h-14 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 shadow-inner flex items-center justify-center pointer-events-none">
+          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-zinc-900 border border-zinc-600">
+            <span className="text-white text-lg font-semibold leading-none">{formatDisplay(values[currentIndex] ?? value)}</span>
+          </div>
         </div>
       </div>
     </div>
