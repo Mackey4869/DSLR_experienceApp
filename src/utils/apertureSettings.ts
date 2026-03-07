@@ -1,6 +1,6 @@
 // Aperture-related settings and helpers
-export const MIN_APERTURE = 1.2;
-export const MAX_APERTURE = 22;
+export const MIN_APERTURE = 2.8;
+export const MAX_APERTURE = 16;
 
 export type DofParams = {
 	radius: number; // pixels

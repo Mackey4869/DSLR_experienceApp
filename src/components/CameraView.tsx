@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from "react";
 import Webcam from "react-webcam";
 import useCamera from "../hooks/useCamera";
 import { applyApertureEffects, applyFilmGrainOnCanvas, applyColorNoiseOnCanvas } from "../utils/imageEffects";
+import CircularDial from "./CircularDial";
 
 // UI 層: レイアウトとコントロールのみを担当。カメラ制御は hook に移譲。
 const CameraView: React.FC = () => {
@@ -142,7 +143,7 @@ const CameraView: React.FC = () => {
 					)}
 				</div>
 				{/* small overlay info */}
-				<div style={{ position: 'absolute', left: '4%', bottom: '6%', width: '92%', display: 'flex', justifyContent: 'space-around', color: '#ffd54f', fontFamily: 'monospace', fontSize: '0.8rem' }}>
+				<div style={{ position: 'absolute', left: '4%', bottom: '6%', width: '92%', display: 'flex', justifyContent: 'space-around', color: '#ffffff', fontFamily: 'monospace', fontSize: '0.8rem' }}>
 					<span>F{settings.aperture.toFixed(1)}</span>
 					<span>SS 1/{Math.round(1 / settings.shutterSpeed)}</span>
 					<span>ISO {settings.iso}</span>
@@ -151,23 +152,25 @@ const CameraView: React.FC = () => {
 
 			{/* Controls: sliders above capture button */}
 			<div className="w-[80%] max-w-[360px] flex flex-col items-center mt-2" style={{ gap: '0.3rem' }}>
-				<div className="w-full flex justify-between items-center" style={{ gap: '0.3rem' }}>
-					<div className="text-white text-xs">F</div>
-					{APERTURE_VALUES && (
-						<input className="flex-1" type="range" min={0} max={APERTURE_VALUES.length - 1} step={1} value={Math.max(0, APERTURE_VALUES.indexOf(settings.aperture))} onChange={e => setAperture(APERTURE_VALUES[Number(e.target.value)])} style={{ accentColor: '#ff3b30' }} />
-					)}
-				</div>
-				<div className="w-full flex justify-between items-center" style={{ gap: '0.3rem' }}>
-					<div className="text-white text-xs">SS</div>
-					{SHUTTER_VALUES && (
-						<input className="flex-1" type="range" min={0} max={SHUTTER_VALUES.length - 1} step={1} value={Math.max(0, SHUTTER_VALUES.indexOf(settings.shutterSpeed))} onChange={e => setShutterSpeed(SHUTTER_VALUES[Number(e.target.value)])} style={{ accentColor: '#ff3b30' }} />
-					)}
-				</div>
-				<div className="w-full flex justify-between items-center" style={{ gap: '0.3rem' }}>
-					<div className="text-white text-xs">ISO</div>
-					{ISO_VALUES && (
-						<input className="flex-1" type="range" min={0} max={ISO_VALUES.length - 1} step={1} value={Math.max(0, ISO_VALUES.indexOf(settings.iso))} onChange={e => setIso(ISO_VALUES[Number(e.target.value)])} style={{ accentColor: '#ff3b30' }} />
-					)}
+				<div className="w-full flex justify-between items-center" style={{ gap: '0.6rem' }}>
+					<div className="flex-1 flex flex-col items-center">
+						<div className="text-white text-xs mb-1">F</div>
+						{APERTURE_VALUES && (
+							<CircularDial value={settings.aperture} onChange={(v) => setAperture(v)} label="Aperture" values={APERTURE_VALUES} />
+						)}
+					</div>
+					<div className="flex-1 flex flex-col items-center">
+						<div className="text-white text-xs mb-1">SS</div>
+						{SHUTTER_VALUES && (
+							<CircularDial value={settings.shutterSpeed} onChange={(v) => setShutterSpeed(v)} label="Shutter" values={SHUTTER_VALUES} />
+						)}
+					</div>
+					<div className="flex-1 flex flex-col items-center">
+						<div className="text-white text-xs mb-1">ISO</div>
+						{ISO_VALUES && (
+							<CircularDial value={settings.iso} onChange={(v) => setIso(v)} label="ISO" values={ISO_VALUES} />
+						)}
+					</div>
 				</div>
 			</div>
 
@@ -178,7 +181,7 @@ const CameraView: React.FC = () => {
 				</div>
 			)}
 			<div className="w-full flex items-center justify-center" style={{ height: '3.8rem', marginTop: 'auto', marginBottom: '0.6rem' }}>
-				<button onClick={() => { setNotice('保存機能はこれから実装します'); setTimeout(() => setNotice(''), 1800); handleCapture(); }} aria-label="capture" title="Capture" style={{ width: '3.2rem', height: '3.2rem', borderRadius: '9999px', background: 'radial-gradient(circle at 30% 30%, #ffd54f, #ffb300)', border: '3px solid #fff', opacity: 0.6 }} />
+				<button onClick={() => { setNotice('保存機能はこれから実装します'); setTimeout(() => setNotice(''), 1800); handleCapture(); }} aria-label="capture" title="Capture" style={{ width: '3.2rem', height: '3.2rem', borderRadius: '9999px', background: 'radial-gradient(circle at 30% 30%, #ffffff, #ffffff)', border: '3px solid #fff', opacity: 0.9 }} />
 			</div>
 
 			{/* last capture preview (small) */}
