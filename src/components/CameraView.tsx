@@ -45,21 +45,35 @@ const CameraView: React.FC = () => {
 				const canvas = overlayCanvasRef.current;
 				if (!video || !canvas) return;
 
-				// ensure canvas internal size matches scaled video size
+				// ensure canvas internal size matches 2:3 aspect ratio scaled for performance
 				const vw = video.videoWidth || Math.max(1, video.clientWidth);
 				const vh = video.videoHeight || Math.max(1, video.clientHeight);
-				const cw = Math.max(1, Math.floor(vw * PROCESS_SCALE));
-				const ch = Math.max(1, Math.floor(vh * PROCESS_SCALE));
-				if (canvas.width !== cw || canvas.height !== ch) {
-					canvas.width = cw;
-					canvas.height = ch;
+				const TARGET_ASPECT = 2 / 3;
+
+				let cw, ch;
+				if (vw / vh > TARGET_ASPECT) {
+					// video is wider than 2:3 (e.g. 16:9)
+					ch = vh;
+					cw = vh * TARGET_ASPECT;
+				} else {
+					// video is narrower/taller than 2:3
+					cw = vw;
+					ch = vw / TARGET_ASPECT;
+				}
+
+				const finalCw = Math.max(1, Math.floor(cw * PROCESS_SCALE));
+				const finalCh = Math.max(1, Math.floor(ch * PROCESS_SCALE));
+
+				if (canvas.width !== finalCw || canvas.height !== finalCh) {
+					canvas.width = finalCw;
+					canvas.height = finalCh;
 				}
 
 				const tap = lastTapRef.current;
 				const tx = tap ? tap.x : vw / 2;
 				const ty = tap ? tap.y : vh / 2;
-				const sx = canvas.width / vw;
-				const sy = canvas.height / vh;
+				const sx = canvas.width / cw; // Note: sx/sy here are for scaling effects if needed, but applyApertureEffects handles its own mapping now
+				const sy = canvas.height / ch;
 				const brightness = computeBrightness(settings.aperture, settings.shutterSpeed, settings.iso);
 				await applyApertureEffects(video, canvas, tx * sx, ty * sy, settings.aperture, settings.bladeCount, brightness);
 				// apply film-like luminance noise depending on ISO
@@ -81,6 +95,30 @@ const CameraView: React.FC = () => {
 	const [selectedMode, setSelectedMode] = useState<'ss'|'f'|'iso'>('ss');
 	const [notice, setNotice] = useState("");
 
+	// helper: return conditional note strings based on current settings
+	const getShutterNote = () => {
+		const recip = Math.round(1 / settings.shutterSpeed);
+		if (recip >= 125) return '動体○';
+		if (recip <= 60) return 'ブレに注意';
+		return '';
+	};
+
+	const getApertureNote = () => {
+		const a = settings.aperture;
+		if (a >= 2.8 && a <= 4) return 'ボケやすい';
+		if (a >= 4.5 && a <= 10) return 'バランス型';
+		if (a >= 11 && a <= 16) return '光芒出現';
+		return '';
+	};
+
+	const getIsoNote = () => {
+		const iso = settings.iso;
+		if (iso >= 100 && iso <= 400) return '低ノイズ';
+		if (iso >= 800 && iso <= 1600) return '中ノイズ';
+		if (iso >= 3200 && iso <= 6400) return '高ノイズ';
+		return '';
+	};
+
 	return (
 		<div className="min-h-[100svh] w-full flex flex-col items-center text-white" style={{ background: 'linear-gradient(180deg,#0e0f10,#191a1b)' }}>
 			{/* Top menu (no navigation links) */}
@@ -91,8 +129,9 @@ const CameraView: React.FC = () => {
 			</div>
 
 			{/* Camera preview area (2:3 aspect) */}
-			<div className="w-[80%] max-w-[360px] mt-1" style={{ aspectRatio: '2 / 3', position: 'relative' }}>
-				<div className="absolute inset-0 rounded-md overflow-hidden border" style={{ borderColor: '#222', background: '#000' }}>
+			<div className="w-[95%] max-w-none mt-1 px-2" style={{ aspectRatio: '2 / 3', position: 'relative', background: '#000' }}>
+				{/* inner frame: 90% size of outer, positioned toward top to leave bottom space for values */}
+				<div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: '1%', width: '90%', height: '90%', borderRadius: '0.5rem', overflow: 'hidden', border: '1px solid #222', background: '#222222' }}>
 					{isCameraOn ? (
 						<>
 							<Webcam
@@ -117,18 +156,42 @@ const CameraView: React.FC = () => {
 										const video = (webcamRef.current as any)?.video as HTMLVideoElement | undefined;
 										const canvas = overlayCanvasRef.current;
 										if (!video || !canvas) return;
-										// compute click pos relative to element and scale to video pixels
+										// compute click pos relative to element
 										const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
 										const clickX = ev.clientX - rect.left;
 										const clickY = ev.clientY - rect.top;
-										// scale to video natural size
-										const sx = video.videoWidth / rect.width;
-										const sy = video.videoHeight / rect.height;
-										const tx = clickX * sx;
-										const ty = clickY * sy;
+
+										const vw = video.videoWidth || video.clientWidth;
+										const vh = video.videoHeight || video.clientHeight;
+										const TARGET_ASPECT = 2 / 3;
+
+										// Calculate the same 'cover' crop used in rendering to map coordinates back
+										const videoAspect = vw / vh;
+										const canvasAspect = TARGET_ASPECT;
+
+										let sx, sy, sw, sh;
+										if (videoAspect > canvasAspect) {
+											sh = vh;
+											sw = vh * canvasAspect;
+											sx = (vw - sw) / 2;
+											sy = 0;
+										} else {
+											sw = vw;
+											sh = vw / canvasAspect;
+											sx = 0;
+											sy = (vh - sh) / 2;
+										}
+
+										// Map click on canvas (rect.width x rect.height) to source video (sw x sh) starting at (sx, sy)
+										const tx = sx + (clickX / rect.width) * sw;
+										const ty = sy + (clickY / rect.height) * sh;
+
 										lastTapRef.current = { x: tx, y: ty };
 										const brightness = computeBrightness(settings.aperture, settings.shutterSpeed, settings.iso);
-										await applyApertureEffects(video, canvas, tx, ty, settings.aperture, settings.bladeCount, brightness);
+										// Use canvas dimensions for effect scaling
+										const scaleX = canvas.width / sw;
+										const scaleY = canvas.height / sh;
+										await applyApertureEffects(video, canvas, (tx - sx) * scaleX, (ty - sy) * scaleY, settings.aperture, settings.bladeCount, brightness);
 										// apply film-like luminance noise depending on ISO
 										applyFilmGrainOnCanvas(canvas, settings.iso);
 										// add light color noise (chrominance)
@@ -143,17 +206,30 @@ const CameraView: React.FC = () => {
 						<div className="w-full h-full flex items-center justify-center text-gray-400">Camera Off</div>
 					)}
 				</div>
-				{/* small overlay info */}
-				<div style={{ position: 'absolute', left: '4%', bottom: '6%', width: '92%', display: 'flex', justifyContent: 'space-around', color: '#ffffff', fontFamily: 'monospace', fontSize: '0.8rem' }}>
-					<span>F{settings.aperture.toFixed(1)}</span>
-					<span>SS 1/{Math.round(1 / settings.shutterSpeed)}</span>
-					<span>ISO {settings.iso}</span>
+
+				{/* values area below inner frame (SS, F, ISO) */}
+				<div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: '1%', width: '92%', display: 'flex', justifyContent: 'space-around', color: '#ffffff', fontFamily: 'monospace', fontSize: '0.8rem' }}>
+					{/* SS column */}
+					<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+						<span>SS 1/{Math.round(1 / settings.shutterSpeed)}</span>
+						{getShutterNote() ? <span style={{ color: '#C2C2C2', fontSize: '0.72rem', marginTop: 4 }}>{getShutterNote()}</span> : null}
+					</div>
+					{/* F column */}
+					<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+						<span>F{settings.aperture.toFixed(1)}</span>
+						{getApertureNote() ? <span style={{ color: '#C2C2C2', fontSize: '0.72rem', marginTop: 4 }}>{getApertureNote()}</span> : null}
+					</div>
+					{/* ISO column */}
+					<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+						<span>ISO {settings.iso}</span>
+						{getIsoNote() ? <span style={{ color: '#C2C2C2', fontSize: '0.72rem', marginTop: 4 }}>{getIsoNote()}</span> : null}
+					</div>
 				</div>
 			</div>
 
 
 			{/* Controls: single dial at bottom-left with 3 arc-buttons (SS, F, ISO) */}
-			<div style={{ position: 'absolute', left: 12, bottom: 12, width: 220, height: 220 }}>
+			<div style={{ position: 'absolute', left: -8, bottom: 4, width: 220, height: 220 }}>
 				<div style={{ position: 'relative', width: '100%', height: '100%' }}>
 					{/* dial center coordinates (relative to this container) */}
 					{(() => {

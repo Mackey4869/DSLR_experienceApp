@@ -182,7 +182,7 @@ export default function CircularDial({
     <div className="flex flex-col items-center">
       <div
         ref={dialRef}
-        className="relative w-32 h-32 cursor-grab active:cursor-grabbing select-none"
+        className="relative w-28 h-28 cursor-grab active:cursor-grabbing select-none"
         style={{ touchAction: 'none', WebkitUserSelect: 'none' as any }}
         onMouseDown={(e) => handleStart(e.clientX, e.clientY)}
         onTouchStart={(e) => {
@@ -226,9 +226,9 @@ export default function CircularDial({
           </g>
         </svg>
 
-        <div className="absolute inset-0 m-auto w-14 h-14 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 shadow-inner flex items-center justify-center pointer-events-none">
-          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-zinc-900 border border-zinc-600">
-            <span className="text-white text-lg font-semibold leading-none">{formatDisplay(values[currentIndex] ?? value)}</span>
+        <div className="absolute inset-0 m-auto w-12 h-12 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 shadow-inner flex items-center justify-center pointer-events-none">
+          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-zinc-900 border border-zinc-600">
+            <span className="text-white text-base font-semibold leading-none">{formatDisplay(values[currentIndex] ?? value)}</span>
           </div>
         </div>
       </div>
