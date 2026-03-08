@@ -154,27 +154,58 @@ const ExposureTriangle: React.FC<ExposureTriangleProps> = ({
       {/* 学習用ポップアップ */}
       {isOpen && (
         <div 
-          className="fixed inset-0 flex items-center justify-center p-6 z-[2000] backdrop-blur-sm bg-black/70"
+          className="fixed inset-0 flex items-center justify-center p-6 z-[2000] backdrop-blur-md bg-black/80"
           onClick={() => setIsOpen(false)}
         >
           <div 
-            className="bg-[#222] border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center"
+            className="bg-neutral-900 border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl relative overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-white text-lg font-bold mb-4">💡 露出の三角形</h3>
-            <p className="text-gray-300 text-sm leading-relaxed mb-6">
-              中の白い三角形の面積は、写真に取り込む光の量を表します。
-              <br /><br />
-              三角形が<span className="text-white font-bold">大きいほど明るい写真</span>になり、
-              <span className="text-white font-bold">小さいほど暗い写真</span>になります。
-              <br /><br />
-              SS、F、ISOのバランスを調整して、最適な面積（露出）を見つけましょう。
-            </p>
+            {/* 装飾的なアクセント */}
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-600 to-transparent opacity-50" />
+
+            {/* ヘッダー部分 */}
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-1 h-5 bg-red-600 rounded-full" />
+                <h3 className="text-white text-lg font-black tracking-tight italic uppercase">
+                  Exposure <span className="text-red-600">Triangle</span>
+                </h3>
+              </div>
+              <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold ml-3">
+                露出の仕組みを理解する
+              </p>
+            </div>
+
+            {/* コンテンツ部分 */}
+            <div className="space-y-4 text-left">
+              <div className="text-sm text-gray-300 leading-relaxed bg-white/5 p-4 rounded-xl border border-white/5">
+                中央の白い三角形の面積は、センサーに取り込まれる<span className="text-white font-bold">「光の総量」</span>を視覚化したものです。
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-neutral-800/50 p-3 rounded-lg border border-white/5">
+                  <div className="text-[10px] text-red-500 font-bold mb-1 uppercase tracking-tighter">Large Area</div>
+                  <div className="text-xs text-white font-bold leading-tight">三角形が大きい</div>
+                  <div className="text-[10px] text-gray-400 mt-1">写真は明るくなる</div>
+                </div>
+                <div className="bg-neutral-800/50 p-3 rounded-lg border border-white/5">
+                  <div className="text-[10px] text-gray-500 font-bold mb-1 uppercase tracking-tighter">Small Area</div>
+                  <div className="text-xs text-white font-bold leading-tight">三角形が小さい</div>
+                  <div className="text-[10px] text-gray-400 mt-1">写真は暗くなる</div>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-gray-400 leading-relaxed px-1">
+                シャッタースピード(SS)、絞り(F値)、ISO感度の3つをバランスよく調整して、イメージ通りの露出（面積）を見つけましょう。
+              </p>
+            </div>
+
             <button 
               onClick={() => setIsOpen(false)}
-              className="bg-white/10 hover:bg-white/20 text-white px-6 py-2 rounded-lg text-sm font-bold transition-colors w-full"
+              className="mt-8 w-full py-3 bg-white hover:bg-neutral-200 text-black text-[10px] font-black uppercase tracking-[0.2em] rounded-lg transition-all active:scale-95"
             >
-              閉じる
+              Close Guide
             </button>
           </div>
         </div>
