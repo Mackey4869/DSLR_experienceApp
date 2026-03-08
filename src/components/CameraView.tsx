@@ -3,6 +3,7 @@ import Webcam from "react-webcam";
 import useCamera from "../hooks/useCamera";
 import { applyApertureEffects, applyFilmGrainOnCanvas, applyColorNoiseOnCanvas } from "../utils/imageEffects";
 import CircularDial from "./CircularDial";
+import ExposureTriangle from "./ExposureTriangle";
 
 // UI 層: レイアウトとコントロールのみを担当。カメラ制御は hook に移譲。
 const CameraView: React.FC = () => {
@@ -117,6 +118,19 @@ const CameraView: React.FC = () => {
 		if (iso >= 800 && iso <= 1600) return '中ノイズ';
 		if (iso >= 3200 && iso <= 6400) return '高ノイズ';
 		return '';
+	};
+
+	// ExposureTriangle 用のデータ準備
+	const ssList = SHUTTER_VALUES.map(v => v < 1 ? `1/${Math.round(1/v)}` : `${v}`);
+	const fList = APERTURE_VALUES.map(v => `F${v.toFixed(1)}`);
+	const isoList = ISO_VALUES.map(v => `${v}`);
+
+	const currentSS = settings.shutterSpeed < 1 ? `1/${Math.round(1/settings.shutterSpeed)}` : `${settings.shutterSpeed}`;
+	const currentF = `F${settings.aperture.toFixed(1)}`;
+	const currentISO = `${settings.iso}`;
+
+	const handleLabelClick = (type: 'SS' | 'F' | 'ISO') => {
+		setSelectedMode(type.toLowerCase() as 'ss' | 'f' | 'iso');
 	};
 
 	return (
@@ -282,10 +296,20 @@ const CameraView: React.FC = () => {
 				</div>
 			</div>
 
-			{/* Capture (shutter) button at bottom-right */}
-			<div style={{ position: 'absolute', right: 28, bottom: 28, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-				{/* add space above the shutter button */}
-				<div style={{ height: 48 }} />
+				{/* Capture (shutter) button at bottom-right */}
+				<div style={{ position: 'absolute', right: 28, bottom: 28, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+				{/* 露出の三角形をシャッターボタンの上に配置（少し左下にオフセット） */}
+				<div style={{ width: 120, marginBottom: -20, marginLeft: -10 }}>
+					<ExposureTriangle
+						ssList={ssList}
+						fList={fList}
+						isoList={isoList}
+						currentSS={currentSS}
+						currentF={currentF}
+						currentISO={currentISO}
+						onLabelClick={handleLabelClick}
+					/>
+				</div>
 				<button onClick={() => { setNotice('保存機能はこれから実装します'); setTimeout(() => setNotice(''), 1800); handleCapture(); }} aria-label="capture" title="Capture" style={{ width: 76, height: 76, borderRadius: 9999, background: 'radial-gradient(circle at 30% 30%, #ffffff, #ffffff)', border: '4px solid #fff', opacity: 0.98, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
 					<span className="material-symbols-outlined" style={{ fontSize: '2rem', lineHeight: 1, color: '#111' }}>photo_camera</span>
 				</button>
