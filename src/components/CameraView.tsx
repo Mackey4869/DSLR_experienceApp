@@ -313,6 +313,9 @@ const CameraView: React.FC = () => {
 		// ※ CSSフィルタによるボケはここには含まれない
 		const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
 		setCapturedImage(dataUrl);
+
+		// [追加]: プレビュー表示中はカメラをオフにする
+		stopCamera();
 	};
 
 	return (
@@ -501,7 +504,10 @@ const CameraView: React.FC = () => {
 					</div>
 					
 					<button 
-						onClick={() => setCapturedImage(null)}
+						onClick={() => {
+							startCamera();
+							setCapturedImage(null);
+						}}
 						className="mt-8 px-8 py-3 rounded-full bg-white text-black font-bold text-sm tracking-widest active:scale-95 transition-transform"
 					>
 						BACK TO CAMERA
