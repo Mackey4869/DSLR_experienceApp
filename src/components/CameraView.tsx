@@ -4,6 +4,7 @@ import useCamera from "../hooks/useCamera";
 import useFrameProcessor from "../hooks/useFrameProcessor";
 import CircularDial from "./CircularDial";
 import ExposureTriangle from "./ExposureTriangle";
+import InfoScreen from "./InfoScreen"; // [追加]: InfoScreenのインポート
 import { 
     calculateBlurAmount, 
     getShutterNote, 
@@ -41,16 +42,18 @@ const CameraView: React.FC = () => {
 	const [capturedImage, setCapturedImage] = useState<string | null>(null);
 	const [isFlashing, setIsFlashing] = useState(false);
 	const [selectedMode, setSelectedMode] = useState<'ss'|'f'|'iso'>('ss');
-	const [headerActive, setHeaderActive] = useState<'gallery'|'info'|'camera'|null>(null);
+	
+	// [変更]: activeView 状態の追加 (デフォルトは 'camera')
+	const [activeView, setActiveView] = useState<'camera' | 'info' | 'gallery'>('camera');
 	const [notice] = useState("");
 
-	useEffect(() => {
-		if (isCameraOn) {
-			setHeaderActive('camera');
-		} else if (headerActive === 'camera') {
-			setHeaderActive(null);
+	// [追加]: タブ切り替え時のカメラ制御
+	const handleViewChange = (view: 'camera' | 'info' | 'gallery') => {
+		setActiveView(view);
+		if (view !== 'camera') {
+			stopCamera(); // カメラ以外の画面ではストリームを停止
 		}
-	}, [isCameraOn]);
+	};
 
     // Frame processing logic moved to hook
     useFrameProcessor({
@@ -174,84 +177,82 @@ const CameraView: React.FC = () => {
 				<div className="ml-auto flex gap-2 pr-2">
 					<button
 						aria-label="gallery"
-						onClick={() => {
-							if (headerActive === 'gallery') {
-								setHeaderActive(null);
-							} else {
-								setHeaderActive('gallery');
-								if (isCameraOn) stopCamera();
-							}
-						}}
+						onClick={() => handleViewChange('gallery')}
 						className={`px-2 py-1.5 rounded-sm text-xs font-bold shadow-lg transition-colors ${
-							headerActive === 'gallery' ? 'bg-red-600 text-white' : 'bg-white text-black'
+							activeView === 'gallery' ? 'bg-red-600 text-white' : 'bg-white text-black'
 						}`}
 					>
 						Gallery
 					</button>
 					<button
 						aria-label="info"
-						onClick={() => {
-							if (headerActive === 'info') {
-								setHeaderActive(null);
-							} else {
-								setHeaderActive('info');
-								if (isCameraOn) stopCamera();
-							}
-						}}
+						onClick={() => handleViewChange('info')}
 						className={`px-2 py-1.5 rounded-sm text-xs font-bold shadow-lg transition-colors ${
-							headerActive === 'info' ? 'bg-red-600 text-white' : 'bg-white text-black'
+							activeView === 'info' ? 'bg-red-600 text-white' : 'bg-white text-black'
 						}`}
 					>
 						Info
 					</button>
 					<button
 						onClick={() => {
-							if (headerActive === 'camera') {
-								setHeaderActive(null);
-								stopCamera();
-							} else {
-								setHeaderActive('camera');
+							if (activeView !== 'camera') {
+								setActiveView('camera');
 								startCamera();
+							} else {
+								if (isCameraOn) stopCamera();
+								else startCamera();
 							}
 						}}
 						className={`w-24 text-center px-2 py-1.5 rounded-sm text-xs font-bold shadow-lg transition-colors ${
-							headerActive === 'camera' ? 'bg-red-600 text-white' : 'bg-white text-black'
+							activeView === 'camera' && isCameraOn ? 'bg-red-600 text-white' : 'bg-white text-black'
 						}`}
 					>
-						{isCameraOn ? 'Camera OFF' : 'Camera ON'}
+						{activeView === 'camera' && isCameraOn ? 'Camera OFF' : 'Camera ON'}
 					</button>
 				</div>
 			</header>
 
 			<main className="camera-main">
 				<div className="camera-preview-container" ref={containerRef}>
-					{isCameraOn ? (
+					{/* [変更]: activeView に応じた条件付きレンダリング */}
+					{activeView === 'camera' ? (
 						<>
-							<Webcam
-								ref={webcamRef}
-								audio={false}
-								screenshotFormat="image/jpeg"
-								videoConstraints={videoConstraints}
-								mirrored={false}
-								className="w-full h-full object-cover"
-								style={{ filter: computeFilter() }}
-								playsInline
-								onUserMedia={onUserMedia}
-								onUserMediaError={onUserMediaError}
-							/>
-							<canvas
-								ref={overlayCanvasRef}
-								className="absolute inset-0 w-full h-full cursor-crosshair"
-								style={{ 
-									filter: `blur(${calculateBlurAmount(settings.aperture)}px)`,
-									transition: 'filter 0.3s ease-in-out'
-								}}
-								onClick={handlePreviewClick}
-							/>
+							{isCameraOn ? (
+								<>
+									<Webcam
+										ref={webcamRef}
+										audio={false}
+										screenshotFormat="image/jpeg"
+										videoConstraints={videoConstraints}
+										mirrored={false}
+										className="w-full h-full object-cover"
+										style={{ filter: computeFilter() }}
+										playsInline
+										onUserMedia={onUserMedia}
+										onUserMediaError={onUserMediaError}
+									/>
+									<canvas
+										ref={overlayCanvasRef}
+										className="absolute inset-0 w-full h-full cursor-crosshair"
+										style={{ 
+											filter: `blur(${calculateBlurAmount(settings.aperture)}px)`,
+											transition: 'filter 0.3s ease-in-out'
+										}}
+										onClick={handlePreviewClick}
+									/>
+								</>
+							) : (
+								<div className="w-full h-full flex flex-col items-center justify-center text-gray-500 bg-neutral-900">
+									<span className="text-sm font-medium tracking-widest opacity-50 italic">CAMERA_SIGNAL_LOST</span>
+									<span className="text-[10px] mt-2 opacity-30 uppercase tracking-widest">Connect device to start preview</span>
+								</div>
+							)}
 						</>
+					) : activeView === 'info' ? (
+						<InfoScreen />
 					) : (
 						<div className="w-full h-full flex flex-col items-center justify-center text-gray-500 bg-neutral-900">
-							<span className="text-sm font-medium tracking-widest opacity-50">Camera_Off</span>
+							<span className="text-sm font-medium tracking-widest opacity-50">Gallery: 開発中</span>
 						</div>
 					)}
 
@@ -328,7 +329,8 @@ const CameraView: React.FC = () => {
 						</div>
 						<button 
 							onClick={handleCapturePhoto}
-							className="w-[72px] h-[72px] rounded-full bg-white border-[4px] border-neutral-300 active:scale-95 transition-transform flex items-center justify-center shadow-2xl"
+							disabled={!isCameraOn || activeView !== 'camera'}
+							className={`w-[72px] h-[72px] rounded-full bg-white border-[4px] border-neutral-300 active:scale-95 transition-transform flex items-center justify-center shadow-2xl ${(!isCameraOn || activeView !== 'camera') ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
 						>
 							<span className="material-symbols-outlined text-neutral-900 text-3xl">photo_camera</span>
 						</button>
