@@ -95,6 +95,30 @@ const CameraView: React.FC = () => {
 	const [selectedMode, setSelectedMode] = useState<'ss'|'f'|'iso'>('ss');
 	const [notice, setNotice] = useState("");
 
+	// helper: return conditional note strings based on current settings
+	const getShutterNote = () => {
+		const recip = Math.round(1 / settings.shutterSpeed);
+		if (recip >= 125) return '動体○';
+		if (recip <= 60) return 'ブレに注意';
+		return '';
+	};
+
+	const getApertureNote = () => {
+		const a = settings.aperture;
+		if (a >= 2.8 && a <= 4) return 'ボケやすい';
+		if (a >= 4.5 && a <= 10) return 'バランス型';
+		if (a >= 11 && a <= 16) return '光芒出現';
+		return '';
+	};
+
+	const getIsoNote = () => {
+		const iso = settings.iso;
+		if (iso >= 100 && iso <= 400) return '低ノイズ';
+		if (iso >= 800 && iso <= 1600) return '中ノイズ';
+		if (iso >= 3200 && iso <= 6400) return '高ノイズ';
+		return '';
+	};
+
 	return (
 		<div className="min-h-[100svh] w-full flex flex-col items-center text-white" style={{ background: 'linear-gradient(180deg,#0e0f10,#191a1b)' }}>
 			{/* Top menu (no navigation links) */}
@@ -105,8 +129,9 @@ const CameraView: React.FC = () => {
 			</div>
 
 			{/* Camera preview area (2:3 aspect) */}
-			<div className="w-[95%] max-w-none mt-1 px-2" style={{ aspectRatio: '2 / 3', position: 'relative' }}>
-				<div className="absolute inset-0 rounded-md overflow-hidden border" style={{ borderColor: '#222', background: '#000' }}>
+			<div className="w-[95%] max-w-none mt-1 px-2" style={{ aspectRatio: '2 / 3', position: 'relative', background: '#000' }}>
+				{/* inner frame: 90% size of outer, positioned toward top to leave bottom space for values */}
+				<div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: '1%', width: '90%', height: '90%', borderRadius: '0.5rem', overflow: 'hidden', border: '1px solid #222', background: '#222222' }}>
 					{isCameraOn ? (
 						<>
 							<Webcam
@@ -181,11 +206,24 @@ const CameraView: React.FC = () => {
 						<div className="w-full h-full flex items-center justify-center text-gray-400">Camera Off</div>
 					)}
 				</div>
-				{/* small overlay info */}
-				<div style={{ position: 'absolute', left: '4%', bottom: '6%', width: '92%', display: 'flex', justifyContent: 'space-around', color: '#ffffff', fontFamily: 'monospace', fontSize: '0.8rem' }}>
-					<span>SS 1/{Math.round(1 / settings.shutterSpeed)}</span>
-					<span>F{settings.aperture.toFixed(1)}</span>
-					<span>ISO {settings.iso}</span>
+
+				{/* values area below inner frame (SS, F, ISO) */}
+				<div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: '1%', width: '92%', display: 'flex', justifyContent: 'space-around', color: '#ffffff', fontFamily: 'monospace', fontSize: '0.8rem' }}>
+					{/* SS column */}
+					<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+						<span>SS 1/{Math.round(1 / settings.shutterSpeed)}</span>
+						{getShutterNote() ? <span style={{ color: '#C2C2C2', fontSize: '0.72rem', marginTop: 4 }}>{getShutterNote()}</span> : null}
+					</div>
+					{/* F column */}
+					<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+						<span>F{settings.aperture.toFixed(1)}</span>
+						{getApertureNote() ? <span style={{ color: '#C2C2C2', fontSize: '0.72rem', marginTop: 4 }}>{getApertureNote()}</span> : null}
+					</div>
+					{/* ISO column */}
+					<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+						<span>ISO {settings.iso}</span>
+						{getIsoNote() ? <span style={{ color: '#C2C2C2', fontSize: '0.72rem', marginTop: 4 }}>{getIsoNote()}</span> : null}
+					</div>
 				</div>
 			</div>
 
