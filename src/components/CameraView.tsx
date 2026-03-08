@@ -40,8 +40,17 @@ const CameraView: React.FC = () => {
 	const starburstSpriteRef = useRef<HTMLCanvasElement | null>(null);
 	const [capturedImage, setCapturedImage] = useState<string | null>(null);
 	const [isFlashing, setIsFlashing] = useState(false);
-    const [selectedMode, setSelectedMode] = useState<'ss'|'f'|'iso'>('ss');
+	const [selectedMode, setSelectedMode] = useState<'ss'|'f'|'iso'>('ss');
+	const [headerActive, setHeaderActive] = useState<'gallery'|'info'|'camera'|null>(null);
 	const [notice] = useState("");
+
+	useEffect(() => {
+		if (isCameraOn) {
+			setHeaderActive('camera');
+		} else if (headerActive === 'camera') {
+			setHeaderActive(null);
+		}
+	}, [isCameraOn]);
 
     // Frame processing logic moved to hook
     useFrameProcessor({
@@ -162,19 +171,56 @@ const CameraView: React.FC = () => {
 	return (
 		<div className="camera-app-root">
 			<header className="camera-header">
-				<div className="flex gap-2">
-					<button 
-						onClick={() => (isCameraOn ? stopCamera() : startCamera())} 
-						className={`px-4 py-1.5 rounded-full text-xs font-bold shadow-lg transition-colors ${
-							isCameraOn ? 'bg-red-600 text-white' : 'bg-white text-black'
+				<div className="ml-auto flex gap-2 pr-2">
+					<button
+						aria-label="gallery"
+						onClick={() => {
+							if (headerActive === 'gallery') {
+								setHeaderActive(null);
+							} else {
+								setHeaderActive('gallery');
+								if (isCameraOn) stopCamera();
+							}
+						}}
+						className={`px-2 py-1.5 rounded-sm text-xs font-bold shadow-lg transition-colors ${
+							headerActive === 'gallery' ? 'bg-red-600 text-white' : 'bg-white text-black'
+						}`}
+					>
+						Gallery
+					</button>
+					<button
+						aria-label="info"
+						onClick={() => {
+							if (headerActive === 'info') {
+								setHeaderActive(null);
+							} else {
+								setHeaderActive('info');
+								if (isCameraOn) stopCamera();
+							}
+						}}
+						className={`px-2 py-1.5 rounded-sm text-xs font-bold shadow-lg transition-colors ${
+							headerActive === 'info' ? 'bg-red-600 text-white' : 'bg-white text-black'
+						}`}
+					>
+						Info
+					</button>
+					<button
+						onClick={() => {
+							if (headerActive === 'camera') {
+								setHeaderActive(null);
+								stopCamera();
+							} else {
+								setHeaderActive('camera');
+								startCamera();
+							}
+						}}
+						className={`w-24 text-center px-2 py-1.5 rounded-sm text-xs font-bold shadow-lg transition-colors ${
+							headerActive === 'camera' ? 'bg-red-600 text-white' : 'bg-white text-black'
 						}`}
 					>
 						{isCameraOn ? 'Camera OFF' : 'Camera ON'}
 					</button>
 				</div>
-				<button aria-label="info" className={`px-4 py-1.5 rounded-full text-xs font-bold shadow-lg transition-colors ${isCameraOn ? 'bg-red-600 text-white' : 'bg-white text-black'}`}>
-					Info
-				</button>
 			</header>
 
 			<main className="camera-main">
@@ -218,16 +264,16 @@ const CameraView: React.FC = () => {
 			<div className="camera-info">
 				<div className="exposure-info-bar">
 					<div className="exposure-item">
-						<span className="exposure-label">SS {formatShutterSpeed(settings.shutterSpeed)}</span>
-						<span className="exposure-note">{getShutterNote(settings.shutterSpeed)}</span>
+						<span className="exposure-label text-yellow-500">SS {formatShutterSpeed(settings.shutterSpeed)}</span>
+						<span className="exposure-note text-yellow-500">{getShutterNote(settings.shutterSpeed)}</span>
 					</div>
 					<div className="exposure-item">
-						<span className="exposure-label">{formatAperture(settings.aperture)}</span>
-						<span className="exposure-note">{getApertureNote(settings.aperture)}</span>
+						<span className="exposure-label text-yellow-500">{formatAperture(settings.aperture)}</span>
+						<span className="exposure-note text-yellow-500">{getApertureNote(settings.aperture)}</span>
 					</div>
 					<div className="exposure-item">
-						<span className="exposure-label">ISO {settings.iso}</span>
-						<span className="exposure-note">{getIsoNote(settings.iso)}</span>
+						<span className="exposure-label text-yellow-500">ISO {settings.iso}</span>
+						<span className="exposure-note text-yellow-500">{getIsoNote(settings.iso)}</span>
 					</div>
 				</div>
 			</div>
