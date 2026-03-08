@@ -11,6 +11,24 @@ import CircularDial from "./CircularDial";
 import ExposureTriangle from "./ExposureTriangle";
 import "../App.css";
 
+// [追加]: F値連動ボケ計算ロジック
+/**
+ * F値の文字列から数値を抽出し、それに基づいたブラー量（px）を返します。
+ * F値が小さい（明るい）ほどボケが強く、F8以上でボケが消失するように設定。
+ */
+const calculateBlurAmount = (fValueString: string): number => {
+	const fValue = parseFloat(fValueString.replace('F', ''));
+	if (isNaN(fValue)) return 0;
+	
+	// F1.4で最大8px、段階的に減衰させ、F8.0以上で0px（くっきり）
+	if (fValue <= 1.4) return 8;
+	if (fValue <= 2.0) return 6;
+	if (fValue <= 2.8) return 4;
+	if (fValue <= 4.0) return 2;
+	if (fValue <= 5.6) return 1;
+	return 0;
+};
+
 const CameraView: React.FC = () => {
 	const {
 		webcamRef,
@@ -223,6 +241,11 @@ const CameraView: React.FC = () => {
 							<canvas
 								ref={overlayCanvasRef}
 								className="absolute inset-0 w-full h-full cursor-crosshair"
+								// [追加]: F値連動ボケ処理 (filter: blur) と滑らかな遷移 (transition)
+								style={{ 
+									filter: `blur(${calculateBlurAmount(currentF)}px)`,
+									transition: 'filter 0.3s ease-in-out'
+								}}
 								onClick={handlePreviewClick}
 							/>
 						</>
