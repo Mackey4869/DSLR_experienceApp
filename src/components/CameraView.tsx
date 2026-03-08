@@ -243,8 +243,8 @@ const CameraView: React.FC = () => {
 								</>
 							) : (
 								<div className="w-full h-full flex flex-col items-center justify-center text-gray-500 bg-neutral-900">
-									<span className="text-sm font-medium tracking-widest opacity-50 italic">CAMERA_SIGNAL_LOST</span>
-									<span className="text-[10px] mt-2 opacity-30 uppercase tracking-widest">Connect device to start preview</span>
+									<span className="text-lg font-medium tracking-widest opacity-70 italic">CAMERA_SIGNAL_LOST</span>
+									<span className="text-sm mt-2 opacity-40 uppercase tracking-widest">Connect device to start preview</span>
 								</div>
 							)}
 						</>
