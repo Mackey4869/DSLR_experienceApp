@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect, useMemo } from "react";
 import Webcam from "react-webcam";
 import useCamera from "../hooks/useCamera";
 import { 
-	applyDepthOfFieldFromVideo, // [改善]: 直接DOF関数を呼ぶように変更
+	applyDepthOfFieldFromVideo, 
 	applyFilmGrainOnCanvas, 
 	applyColorNoiseOnCanvas,
 	calculateLongExposureAlpha
@@ -29,7 +29,7 @@ const CameraView: React.FC = () => {
 		isCameraOn,
 		startCamera,
 		stopCamera,
-		handleCapture,
+		// handleCapture, // [変更]: 内部でローカルの撮影ロジックを実装するため未使用に
 		videoConstraints,
 		onUserMedia,
 		onUserMediaError,
@@ -50,11 +50,15 @@ const CameraView: React.FC = () => {
 	const lastTapRef = useRef<{ x: number; y: number } | null>(null);
 	const PROCESS_SCALE = 0.5;
 
-	// [改善]: 光芒処理用リソース
+	// [追加]: 撮影機能の状態管理
+	const [capturedImage, setCapturedImage] = useState<string | null>(null);
+	const [isFlashing, setIsFlashing] = useState(false);
+
+	// 光芒処理用リソース
 	const starburstSpriteRef = useRef<HTMLCanvasElement | null>(null);
 	const detectionCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
-	// [改善]: 高品質な光芒スプライトの事前生成
+	// 高品質な光芒スプライトの事前生成
 	useEffect(() => {
 		const spriteSize = 256;
 		const canvas = document.createElement('canvas');
@@ -67,7 +71,6 @@ const CameraView: React.FC = () => {
 		const cy = spriteSize / 2;
 		const bladeCount = settings.bladeCount || 6;
 
-		// 1. 中心部のグロー（円形グラデーション）
 		const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, spriteSize * 0.15);
 		grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
 		grad.addColorStop(0.4, 'rgba(255, 250, 230, 0.4)');
@@ -77,7 +80,6 @@ const CameraView: React.FC = () => {
 		ctx.arc(cx, cy, spriteSize * 0.15, 0, Math.PI * 2);
 		ctx.fill();
 
-		// 2. 光の筋（先端が細く消えていく）
 		for (let i = 0; i < bladeCount; i++) {
 			const angle = (i * Math.PI * 2) / bladeCount;
 			ctx.save();
@@ -94,7 +96,7 @@ const CameraView: React.FC = () => {
 			ctx.fillStyle = rayGrad;
 			ctx.beginPath();
 			ctx.moveTo(0, -rayWidth / 2);
-			ctx.lineTo(rayLength, 0); // 先端を細く
+			ctx.lineTo(rayLength, 0); 
 			ctx.lineTo(0, rayWidth / 2);
 			ctx.closePath();
 			ctx.fill();
@@ -156,12 +158,9 @@ const CameraView: React.FC = () => {
 
 				const ctx = canvas.getContext('2d')!;
 
-				// [改善]: 旧 applyApertureEffects の代わりに直接 DOF 描画を実行
 				await applyDepthOfFieldFromVideo(video, canvas, relativeX, relativeY, settings.aperture, brightness, alpha);
 
-				// [改善]: 光芒（Starburst）処理
 				if (settings.aperture >= 8 && starburstSpriteRef.current) {
-					// 1. 極小キャンバスでの高輝度検出 (64x64)
 					if (!detectionCanvasRef.current) {
 						detectionCanvasRef.current = document.createElement('canvas');
 						detectionCanvasRef.current.width = 64;
@@ -170,31 +169,26 @@ const CameraView: React.FC = () => {
 					const detCanvas = detectionCanvasRef.current;
 					const detCtx = detCanvas.getContext('2d', { willReadFrequently: true })!;
 					
-					// 映像をダウンスケールして描画
 					detCtx.drawImage(video, sx, sy, sw, sh, 0, 0, detCanvas.width, detCanvas.height);
 					const imgData = detCtx.getImageData(0, 0, detCanvas.width, detCanvas.height);
 					const data = imgData.data;
 					const threshold = 240;
 					const brightPoints: {x: number, y: number}[] = [];
 
-					// ピクセル走査（パフォーマンスのためステップ実行）
 					for (let i = 0; i < data.length; i += 4 * 2) { 
 						if (data[i] > threshold && data[i+1] > threshold && data[i+2] > threshold) {
 							const pixelIdx = i / 4;
 							const x = pixelIdx % detCanvas.width;
 							const y = Math.floor(pixelIdx / detCanvas.width);
 							brightPoints.push({ x, y });
-							if (brightPoints.length > 10) break; // 最大10箇所に制限
+							if (brightPoints.length > 10) break;
 						}
 					}
 
-					// 2. 加算合成による光芒描画
 					if (brightPoints.length > 0) {
 						ctx.save();
 						ctx.globalCompositeOperation = 'lighter';
 						
-						// F値に応じてサイズと不透明度を調整
-						// 強度を全体的に小さく調整
 						const fRatio = (settings.aperture - 8) / (16 - 8);
 						const starScale = 0.4 + fRatio * 0.8; 
 						ctx.globalAlpha = Math.min(1, 0.2 + fRatio * 0.4);
@@ -306,6 +300,21 @@ const CameraView: React.FC = () => {
 		}
 	};
 
+	// [追加]: 撮影機能（handleCapture）の実装
+	const handleCapturePhoto = () => {
+		const canvas = overlayCanvasRef.current;
+		if (!canvas) return;
+
+		// 1. フラッシュエフェクトの発動
+		setIsFlashing(true);
+		setTimeout(() => setIsFlashing(false), 200);
+
+		// 2. Canvasから現在の描画内容（残像、光芒、ノイズ等）をキャプチャ
+		// ※ CSSフィルタによるボケはここには含まれない
+		const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+		setCapturedImage(dataUrl);
+	};
+
 	return (
 		<div className="camera-app-root">
 			<header className="camera-header">
@@ -354,6 +363,11 @@ const CameraView: React.FC = () => {
 						<div className="w-full h-full flex flex-col items-center justify-center text-gray-500 bg-neutral-900">
 							<span className="text-sm font-medium tracking-widest opacity-50">Camera_Off</span>
 						</div>
+					)}
+
+					{/* [追加]: フラッシュエフェクト用オーバーレイ */}
+					{isFlashing && (
+						<div className="absolute inset-0 bg-white z-[100] animate-pulse pointer-events-none" />
 					)}
 				</div>
 			</main>
@@ -429,7 +443,8 @@ const CameraView: React.FC = () => {
 							/>
 						</div>
 						<button 
-							onClick={() => { setNotice('保存機能はこれから実装します'); setTimeout(() => setNotice(''), 1800); handleCapture(); }}
+							// [追加]: handleCapturePhoto を実行するように変更
+							onClick={() => { handleCapturePhoto(); }}
 							className="w-[72px] h-[72px] rounded-full bg-white border-[4px] border-neutral-300 active:scale-95 transition-transform flex items-center justify-center shadow-2xl"
 						>
 							<span className="material-symbols-outlined text-neutral-900 text-3xl">photo_camera</span>
@@ -446,9 +461,51 @@ const CameraView: React.FC = () => {
 				)}
 			</div>
 			
+			{/* 既存のミニプレビュー (captured) は残す (useCamera側の仕様に合わせる) */}
 			{captured && (
 				<div className="absolute bottom-4 right-4 p-1 bg-white rounded shadow-2xl z-[60] rotate-3 animate-in fade-in zoom-in duration-300">
 					<img src={captured.image} alt="capture" className="w-16 h-auto rounded-sm" />
+				</div>
+			)}
+
+			{/* [追加]: 撮影結果のフルスクリーンプレビューモーダル */}
+			{capturedImage && (
+				<div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-300">
+					<div className="relative w-full max-w-[500px] aspect-[2/3] bg-neutral-900 rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/10">
+						<img 
+							src={capturedImage} 
+							alt="Captured" 
+							className="w-full h-full object-cover"
+							style={{ 
+								// [重要]: キャプチャ時には反映されないCSSボケをプレビュー時に再適用
+								filter: `blur(${calculateBlurAmount(currentF)}px)`,
+							}}
+						/>
+						
+
+						
+						{/* 撮影データ表示 (装飾的UI) */}
+						<div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent">
+							<div className="flex items-center justify-between text-white/90">
+								<div className="flex flex-col">
+									<span className="text-[10px] uppercase tracking-[0.2em] opacity-50 mb-1">Exposure Settings</span>
+									<div className="flex gap-4 font-mono text-sm font-bold">
+										<span>{currentSS}</span>
+										<span>{currentF}</span>
+										<span>ISO {currentISO}</span>
+									</div>
+								</div>
+
+							</div>
+						</div>
+					</div>
+					
+					<button 
+						onClick={() => setCapturedImage(null)}
+						className="mt-8 px-8 py-3 rounded-full bg-white text-black font-bold text-sm tracking-widest active:scale-95 transition-transform"
+					>
+						BACK TO CAMERA
+					</button>
 				</div>
 			)}
 		</div>
