@@ -176,17 +176,24 @@ const CameraView: React.FC = () => {
 
 	return (
 		<div className="camera-app-root">
-			{/* Header */}
+			{/* 1. Header: Settings and Info */}
 			<header className="camera-header">
-				<button 
-					onClick={() => (isCameraOn ? stopCamera() : startCamera())} 
-					className="bg-white text-black px-4 py-1.5 rounded-full text-sm font-bold shadow-lg"
-				>
-					{isCameraOn ? 'Camera OFF' : 'Camera ON'}
+				<div className="flex gap-2">
+					<button 
+						onClick={() => (isCameraOn ? stopCamera() : startCamera())} 
+						className={`px-4 py-1.5 rounded-full text-xs font-bold shadow-lg transition-colors ${
+							isCameraOn ? 'bg-red-600 text-white' : 'bg-white text-black'
+						}`}
+					>
+						{isCameraOn ? 'Camera OFF' : 'Camera ON'}
+					</button>
+				</div>
+				<button aria-label="info" className={`px-4 py-1.5 rounded-full text-xs font-bold shadow-lg transition-colors ${isCameraOn ? 'bg-red-600 text-white' : 'bg-white text-black'}`}>
+					Info
 				</button>
 			</header>
 
-			{/* Main Camera Area */}
+			{/* 2. Main: Camera Preview Area */}
 			<main className="camera-main">
 				<div className="camera-preview-container" ref={containerRef}>
 					{isCameraOn ? (
@@ -210,16 +217,15 @@ const CameraView: React.FC = () => {
 							/>
 						</>
 					) : (
-						<div className="w-full h-full flex items-center justify-center text-gray-500 bg-neutral-900">
-							<span className="material-symbols-outlined text-4xl mb-2">videocam_off</span>
+						<div className="w-full h-full flex flex-col items-center justify-center text-gray-500 bg-neutral-900">
+							<span className="text-sm font-medium tracking-widest opacity-50">Camera_Off</span>
 						</div>
 					)}
 				</div>
 			</main>
 
-			{/* Footer: Values and Controls */}
-			<footer className="camera-footer">
-				{/* Exposure Values Bar */}
+			{/* 3. Info: Exposure Values Bar */}
+			<div className="camera-info">
 				<div className="exposure-info-bar">
 					<div className="exposure-item">
 						<span className="exposure-label">SS 1/{Math.round(1 / settings.shutterSpeed)}</span>
@@ -234,16 +240,19 @@ const CameraView: React.FC = () => {
 						<span className="exposure-note">{getIsoNote()}</span>
 					</div>
 				</div>
+			</div>
 
-				{/* Controls Layout */}
+			{/* 4. Footer: Controls */}
+			<footer className="camera-footer">
 				<div className="controls-layout">
-					{/* Left: Dial */}
+					{/* Left: Dial Section */}
 					<div className="dial-section">
 						<div className="relative w-full h-full">
 							{(() => {
-								const centerX = 110;
-								const centerY = 140;
-								const radius = 94;
+								// compact layout: lower the dial and reduce its overall size so footer is more compact
+								const centerX = 100;
+								const centerY = 130; // moved slightly down
+								const radius = 84;
 								const angles = [-130, -90, -50];
 								const keys: Array<'ss'|'f'|'iso'> = ['ss','f','iso'];
 								return ['SS','F','ISO'].map((label, idx) => {
@@ -256,10 +265,10 @@ const CameraView: React.FC = () => {
 										<div
 											key={label}
 											className="absolute flex items-center justify-center z-30 cursor-pointer"
-											style={{ left: x - 28, top: y - 28, width: 56, height: 56 }}
+											style={{ left: x - 24, top: y - 24, width: 48, height: 48 }}
 											onClick={() => setSelectedMode(mode)}
 										>
-											<div className={`w-11 h-11 rounded-full flex items-center justify-center font-bold transition-all ${isActive ? 'bg-red-600 shadow-[0_0_15px_rgba(220,38,38,0.5)]' : 'bg-neutral-800 border border-white/10'}`}>
+											<div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold transition-all ${isActive ? 'bg-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.5)]' : 'bg-neutral-800 text-gray-400 border border-white/5'}`}>
 												{label}
 											</div>
 										</div>
@@ -268,7 +277,7 @@ const CameraView: React.FC = () => {
 							})()}
 
 							<div className="absolute inset-0 pointer-events-none">
-								<div className="absolute" style={{ left: 110 - 64, top: 140 - 64, width: 128, height: 128, pointerEvents: 'auto' }}>
+								<div className="absolute" style={{ left: 100 - 64, top: 130 - 64, width: 128, height: 128, pointerEvents: 'auto' }}>
 									{selectedMode === 'f' && <CircularDial value={settings.aperture} onChange={setAperture} label="Aperture" values={APERTURE_VALUES} />}
 									{selectedMode === 'ss' && <CircularDial value={settings.shutterSpeed} onChange={setShutterSpeed} label="Shutter" values={SHUTTER_VALUES} />}
 									{selectedMode === 'iso' && <CircularDial value={settings.iso} onChange={setIso} label="ISO" values={ISO_VALUES} />}
@@ -292,7 +301,7 @@ const CameraView: React.FC = () => {
 						</div>
 						<button 
 							onClick={() => { setNotice('保存機能はこれから実装します'); setTimeout(() => setNotice(''), 1800); handleCapture(); }}
-							className="w-[76px] h-[76px] rounded-full bg-white border-[4px] border-neutral-300 active:scale-95 transition-transform flex items-center justify-center shadow-xl"
+							className="w-[72px] h-[72px] rounded-full bg-white border-[4px] border-neutral-300 active:scale-95 transition-transform flex items-center justify-center shadow-2xl"
 						>
 							<span className="material-symbols-outlined text-neutral-900 text-3xl">photo_camera</span>
 						</button>
@@ -303,16 +312,17 @@ const CameraView: React.FC = () => {
 			{/* Status Overlay */}
 			<div className="status-overlay">
 				{notice && (
-					<div className="bg-black/60 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
-						<span className="text-sm font-medium">{notice}</span>
-					</div>
-				)}
-				{captured && (
-					<div className="p-1 bg-white rounded shadow-2xl">
-						<img src={captured.image} alt="capture" className="w-20 h-auto rounded-sm" />
+					<div className="bg-black/80 backdrop-blur-md px-6 py-3 rounded-full border border-white/20 shadow-2xl">
+						<span className="text-sm font-bold tracking-tight text-white">{notice}</span>
 					</div>
 				)}
 			</div>
+			
+			{captured && (
+				<div className="absolute bottom-4 right-4 p-1 bg-white rounded shadow-2xl z-[60] rotate-3 animate-in fade-in zoom-in duration-300">
+					<img src={captured.image} alt="capture" className="w-16 h-auto rounded-sm" />
+				</div>
+			)}
 		</div>
 	);
 };
