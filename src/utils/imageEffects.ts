@@ -1,7 +1,40 @@
 import { apertureToDof, apertureToStarburst, MAX_APERTURE } from './apertureSettings';
 
+// [追加]: SS文字列を数値に変換し、長秒露光用のアルファ値を計算するヘルパー
+/**
+ * Shutter Speedの文字列（"1/60", "1" など）を数値（秒）に変換し、
+ * フレーム描画時のアルファ（0.0〜1.0）を計算します。
+ * @param ssStr Shutter Speed文字列
+ * @param fps 想定FPS (デフォルト30)
+ * @returns { value: number, alpha: number }
+ */
+export function calculateLongExposureAlpha(ssStr: string, fps: number = 30): { value: number, alpha: number } {
+    let ssValue: number = 1 / 125;
+    if (ssStr.includes('/')) {
+        const parts = ssStr.split('/');
+        ssValue = parseFloat(parts[0]) / parseFloat(parts[1]);
+    } else {
+        ssValue = parseFloat(ssStr);
+    }
+
+    const frameTime = 1 / fps;
+    // SSがフレーム時間より長い場合、残像が発生するようにアルファ値を下げる
+    // 1/60s (0.016) < 1/30s (0.033) -> alpha = 1.0
+    // 1s (1.0) > 1/30s (0.033) -> alpha = 0.033
+    const alpha = Math.min(1.0, frameTime / ssValue);
+    return { value: ssValue, alpha };
+}
+
 // Apply depth-of-field: blur everything except a circular region centered at (cx, cy)
-export async function applyDepthOfFieldFromVideo(video: HTMLVideoElement, outCanvas: HTMLCanvasElement, cx: number, cy: number, aperture: number, brightnessMultiplier = 1) {
+export async function applyDepthOfFieldFromVideo(
+    video: HTMLVideoElement, 
+    outCanvas: HTMLCanvasElement, 
+    cx: number, 
+    cy: number, 
+    aperture: number, 
+    brightnessMultiplier = 1,
+    alpha = 1.0 // [追加]: アルファ値引数
+) {
     // Blur/DOF disabled per request: draw video directly and apply global brightness only.
     const vw = video.videoWidth || video.clientWidth;
     const vh = video.videoHeight || video.clientHeight;
@@ -11,7 +44,11 @@ export async function applyDepthOfFieldFromVideo(video: HTMLVideoElement, outCan
     if (vw === 0 || vh === 0 || cw === 0 || ch === 0) return;
 
     const ctx = outCanvas.getContext('2d')!;
-    ctx.clearRect(0, 0, cw, ch);
+
+    // [追加]: 長秒露光（残像）処理。alphaが1.0未満の場合はclearRectをスキップして重ね書きする。
+    if (alpha >= 1.0) {
+        ctx.clearRect(0, 0, cw, ch);
+    }
 
     // Calculate "cover" dimensions: maintain aspect ratio and crop to fill
     const videoAspect = vw / vh;
@@ -32,10 +69,14 @@ export async function applyDepthOfFieldFromVideo(video: HTMLVideoElement, outCan
         sy = (vh - sh) / 2;
     }
 
+    // [追加]: アルファ値を設定して残像を表現
+    ctx.save();
+    ctx.globalAlpha = alpha;
     ctx.filter = `brightness(${brightnessMultiplier})`;
     // Draw the cropped portion of the video to fill the entire canvas
     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch);
     ctx.filter = 'none';
+    ctx.restore();
 }
 
 // Apply simple starburst (光芒) on top of an existing canvas (outCanvas should already contain image)
@@ -174,12 +215,22 @@ export function applyColorNoiseOnCanvas(outCanvas: HTMLCanvasElement, iso: numbe
 }
 
 // Convenience: capture from video, apply DOF and starburst and draw on outCanvas
-export async function applyApertureEffects(video: HTMLVideoElement, outCanvas: HTMLCanvasElement, tapX: number, tapY: number, aperture: number, bladeCount: number, brightnessMultiplier = 1) {
-    await applyDepthOfFieldFromVideo(video, outCanvas, tapX, tapY, aperture, brightnessMultiplier);
+export async function applyApertureEffects(
+    video: HTMLVideoElement, 
+    outCanvas: HTMLCanvasElement, 
+    tapX: number, 
+    tapY: number, 
+    aperture: number, 
+    bladeCount: number, 
+    brightnessMultiplier = 1,
+    alpha = 1.0 // [追加]: アルファ値引数
+) {
+    await applyDepthOfFieldFromVideo(video, outCanvas, tapX, tapY, aperture, brightnessMultiplier, alpha);
     applyStarburstOnCanvas(outCanvas, aperture, bladeCount);
 }
 
 export default {
+    calculateLongExposureAlpha,
     applyDepthOfFieldFromVideo,
     applyStarburstOnCanvas,
     applyApertureEffects,

@@ -1,7 +1,12 @@
 import React, { useRef, useState, useEffect } from "react";
 import Webcam from "react-webcam";
 import useCamera from "../hooks/useCamera";
-import { applyApertureEffects, applyFilmGrainOnCanvas, applyColorNoiseOnCanvas } from "../utils/imageEffects";
+import { 
+	applyApertureEffects, 
+	applyFilmGrainOnCanvas, 
+	applyColorNoiseOnCanvas,
+	calculateLongExposureAlpha // [追加]: ヘルパーをインポート
+} from "../utils/imageEffects";
 import CircularDial from "./CircularDial";
 import ExposureTriangle from "./ExposureTriangle";
 import "../App.css";
@@ -81,11 +86,16 @@ const CameraView: React.FC = () => {
 
 				const brightness = computeBrightness(settings.aperture, settings.shutterSpeed, settings.iso);
 				
+				// [追加]: SS値に基づいた残像用のアルファ値を計算
+				const currentSSStr = settings.shutterSpeed < 1 ? `1/${Math.round(1/settings.shutterSpeed)}` : `${settings.shutterSpeed}`;
+				const { alpha } = calculateLongExposureAlpha(currentSSStr, 30);
+
 				// マッピング計算
 				const relativeX = (tx - sx) * (canvas.width / sw);
 				const relativeY = (ty - sy) * (canvas.height / sh);
 
-				await applyApertureEffects(video, canvas, relativeX, relativeY, settings.aperture, settings.bladeCount, brightness);
+				// [追加]: alphaを渡して長秒露光をシミュレート
+				await applyApertureEffects(video, canvas, relativeX, relativeY, settings.aperture, settings.bladeCount, brightness, alpha);
 				applyFilmGrainOnCanvas(canvas, settings.iso);
 				applyColorNoiseOnCanvas(canvas, settings.iso, 0.28);
 			} catch (e) {
