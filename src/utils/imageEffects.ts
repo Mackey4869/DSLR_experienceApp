@@ -1,10 +1,8 @@
-import { apertureToDof, apertureToStarburst, MAX_APERTURE } from './apertureSettings';
-
-// [改善]: オフスクリーンノイズ描画用のキャッシュCanvas
+// Cache for off-screen noise canvas
 let noiseCanvas: HTMLCanvasElement | null = null;
 
 /**
- * ノイズテクスチャを1回だけ生成してキャッシュします。
+ * Generates and caches a noise texture once.
  */
 function getOrCreateNoiseCanvas(): HTMLCanvasElement {
     if (noiseCanvas) return noiseCanvas;
@@ -16,8 +14,7 @@ function getOrCreateNoiseCanvas(): HTMLCanvasElement {
     const imgData = ctx.createImageData(512, 512);
 
     for (let i = 0; i < imgData.data.length; i += 4) {
-        // [改善]: 輝度を高く（180〜255）設定し、黒やグレーの粒子を排除して
-        // 白っぽいノイズ（デジタルセンサーの輝度ノイズに近い質感）を生成します。
+        // Higher luminance (180-255) to simulate digital sensor noise
         const val = 180 + Math.random() * 75;
         const r = val + (Math.random() - 0.5) * 20;
         const g = val + (Math.random() - 0.5) * 20;
@@ -32,13 +29,8 @@ function getOrCreateNoiseCanvas(): HTMLCanvasElement {
     return noiseCanvas;
 }
 
-// [追加]: SS文字列を数値に変換し、長秒露光用のアルファ値を計算するヘルパー
 /**
- * Shutter Speedの文字列（"1/60", "1" など）を数値（秒）に変換し、
- * フレーム描画時のアルファ（0.0〜1.0）を計算します。
- * @param ssStr Shutter Speed文字列
- * @param fps 想定FPS (デフォルト30)
- * @returns { value: number, alpha: number }
+ * Converts Shutter Speed string to numeric seconds and calculates alpha for long exposure.
  */
 export function calculateLongExposureAlpha(ssStr: string, fps: number = 30): { value: number, alpha: number } {
     let ssValue: number = 1 / 125;
@@ -54,13 +46,15 @@ export function calculateLongExposureAlpha(ssStr: string, fps: number = 30): { v
     return { value: ssValue, alpha };
 }
 
-// Apply depth-of-field: blur everything except a circular region centered at (cx, cy)
+/**
+ * Applies depth-of-field effect from a video source to a target canvas.
+ */
 export async function applyDepthOfFieldFromVideo(
     video: HTMLVideoElement, 
     outCanvas: HTMLCanvasElement, 
-    cx: number, 
-    cy: number, 
-    aperture: number, 
+    _cx: number, 
+    _cy: number, 
+    _aperture: number, 
     brightnessMultiplier = 1,
     alpha = 1.0 
 ) {
@@ -101,94 +95,26 @@ export async function applyDepthOfFieldFromVideo(
     ctx.restore();
 }
 
-// Apply simple starburst (光芒) on top of an existing canvas
-export function applyStarburstOnCanvas(outCanvas: HTMLCanvasElement, aperture: number, bladeCount: number) {
-    const w = outCanvas.width;
-    const h = outCanvas.height;
-    const ctx = outCanvas.getContext('2d')!;
-
-    const imgData = ctx.getImageData(0, 0, w, h);
-    const startAperture = 9;
-    const tAperture = Math.min(1, Math.max(0, (aperture - startAperture) / (MAX_APERTURE - startAperture)));
-    const threshold = 250 - tAperture * 90;
-    const brightPoints: Array<{ x: number; y: number; intensity: number }> = [];
-    for (let y = 0; y < h; y += 6) {
-        for (let x = 0; x < w; x += 6) {
-            const i = (y * w + x) * 4;
-            const r = imgData.data[i];
-            const g = imgData.data[i + 1];
-            const b = imgData.data[i + 2];
-            const brightness = (0.299 * r + 0.587 * g + 0.114 * b);
-            if (brightness > threshold) {
-                brightPoints.push({ x, y, intensity: brightness });
-            }
-        }
-    }
-
-    if (brightPoints.length === 0) return;
-
-    brightPoints.sort((a, b) => b.intensity - a.intensity);
-    const points = brightPoints.slice(0, 6);
-
-    const { radianceR, lineWidth } = apertureToStarburst(aperture, bladeCount);
-
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-
-    for (const p of points) {
-        const cx = p.x;
-        const cy = p.y;
-        const rawAlpha = Math.min(0.7, Math.max(0, (p.intensity - threshold) / 60));
-        const baseAlpha = rawAlpha * tAperture;
-
-        for (let b = 0; b < bladeCount; b++) {
-            const angle = (b / bladeCount) * Math.PI * 2;
-            for (let layer = 0; layer < 5; layer++) {
-                const t = layer / 5;
-                const len = radianceR * (0.5 + 0.5 * (1 - t));
-                ctx.beginPath();
-                ctx.strokeStyle = `rgba(255,240,200,${baseAlpha * (0.25 * (1 - t))})`;
-                ctx.lineWidth = lineWidth * (0.8 - 0.5 * t);
-                ctx.moveTo(cx, cy);
-                const ex = cx + Math.cos(angle) * len;
-                const ey = cy + Math.sin(angle) * len;
-                ctx.lineTo(ex, ey);
-                ctx.stroke();
-            }
-        }
-    }
-
-    ctx.restore();
-}
-
 /**
- * [改善]: ISO感度に基づいたノイズ描画 (高速版)
- * 暗い箇所でノイズが目立ち、明るい箇所では目立ちにくいデジタルセンサーの特性を再現します。
+ * Applies ISO-based noise (Film Grain & Color Noise) to the canvas.
  */
-export function applyFastNoiseOnCanvas(outCanvas: HTMLCanvasElement, iso: number, intensity = 1.0) {
+export function applyNoiseToCanvas(outCanvas: HTMLCanvasElement, iso: number, grainIntensity = 1.0, colorIntensity = 0.3) {
     const w = outCanvas.width;
     const h = outCanvas.height;
-    if (w === 0 || h === 0) return;
-
-    // ISO 100以下ではノイズを描画しない
-    if (iso <= 100) return;
+    if (w === 0 || h === 0 || iso <= 100) return;
 
     const ctx = outCanvas.getContext('2d')!;
     const noise = getOrCreateNoiseCanvas();
 
-    // ISOとアルファ値の連動 (対数・累乗カーブ)
-    // 高感度(ISO 3200〜)でより顕著になるよう調整
-    const baseAlpha = Math.max(0, Math.pow(Math.log2(iso / 100) / 6, 2) * 0.5) * intensity;
+    // Logarithmic curve for ISO sensitivity
+    const baseAlpha = Math.max(0, Math.pow(Math.log2(iso / 100) / 6, 2) * 0.5);
     
     if (baseAlpha <= 0.005) return;
 
     ctx.save();
 
-    // [改善]: 2つのブレンドモードを組み合わせてリアリティを向上
-
-    // 1. 中間〜ハイライト用のベーステクスチャ (soft-light)
-    // soft-light はハイライトを飛ばしすぎず、自然な質感を加えます
-    ctx.globalAlpha = baseAlpha * 0.7;
+    // 1. Film Grain (Soft-light)
+    ctx.globalAlpha = baseAlpha * 0.7 * grainIntensity;
     ctx.globalCompositeOperation = 'soft-light';
     for (let y = 0; y < h; y += noise.height) {
         for (let x = 0; x < w; x += noise.width) {
@@ -196,10 +122,8 @@ export function applyFastNoiseOnCanvas(outCanvas: HTMLCanvasElement, iso: number
         }
     }
 
-    // 2. シャドウ領域のノイズの浮き上がり (screen)
-    // screen モードは背景が黒に近いほどノイズ成分が加算され、白に近いほど影響がなくなります。
-    // これにより「暗部でノイズが目立つ」デジタルカメラの特性を再現します。
-    ctx.globalAlpha = baseAlpha * 0.3; 
+    // 2. Color/Shadow Noise (Screen)
+    ctx.globalAlpha = baseAlpha * 0.3 * colorIntensity; 
     ctx.globalCompositeOperation = 'screen';
     for (let y = 0; y < h; y += noise.height) {
         for (let x = 0; x < w; x += noise.width) {
@@ -209,40 +133,3 @@ export function applyFastNoiseOnCanvas(outCanvas: HTMLCanvasElement, iso: number
 
     ctx.restore();
 }
-
-// [改善]: 従来の関数も高速版を使用するように変更し、互換性を維持
-export function applyFilmGrainOnCanvas(outCanvas: HTMLCanvasElement, iso: number, intensity = 1) {
-    applyFastNoiseOnCanvas(outCanvas, iso, intensity);
-}
-
-// [改善]: カラーノイズも統合。CameraView側で両方呼ばれることを考慮し、こちらは何もしないか、
-// または微調整として残す。要件に基づき統合し、二重描画を避けるためこちらの実体は空にする。
-export function applyColorNoiseOnCanvas(outCanvas: HTMLCanvasElement, iso: number, intensity = 0.3) {
-    // 統合された applyFastNoiseOnCanvas がすでに呼ばれているため、ここでは何もしない。
-    // (CameraView.tsx が両方を呼んでいるため、二重描画を防ぐ)
-}
-
-// Convenience: capture from video, apply DOF and starburst and draw on outCanvas
-export async function applyApertureEffects(
-    video: HTMLVideoElement, 
-    outCanvas: HTMLCanvasElement, 
-    tapX: number, 
-    tapY: number, 
-    aperture: number, 
-    bladeCount: number, 
-    brightnessMultiplier = 1,
-    alpha = 1.0 
-) {
-    await applyDepthOfFieldFromVideo(video, outCanvas, tapX, tapY, aperture, brightnessMultiplier, alpha);
-    applyStarburstOnCanvas(outCanvas, aperture, bladeCount);
-}
-
-export default {
-    calculateLongExposureAlpha,
-    applyDepthOfFieldFromVideo,
-    applyStarburstOnCanvas,
-    applyApertureEffects,
-    applyFastNoiseOnCanvas,
-    applyFilmGrainOnCanvas,
-    applyColorNoiseOnCanvas,
-};

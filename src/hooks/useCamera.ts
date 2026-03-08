@@ -1,32 +1,33 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import Webcam from "react-webcam";
 import useExposure from "./useExposure";
 
-type UseCameraResult = {
-	webcamRef: React.RefObject<any>;
+export interface CameraSettings {
+	iso: number;
+	shutterSpeed: number;
+	aperture: number;
+	sensorSize: string;
+	bladeCount: number;
+}
+
+export interface UseCameraResult {
+	webcamRef: React.RefObject<Webcam | null>;
 	isCameraOn: boolean;
 	startCamera: () => void;
 	stopCamera: () => void;
-	handleCapture: () => { timestamp: string; settings: any; image: string | null } | null;
 	videoConstraints: MediaTrackConstraints | undefined;
 	onUserMedia: () => void;
-	onUserMediaError: (err: any) => void;
+	onUserMediaError: (err: string | Error) => void;
 	computeFilter: () => string;
-		computeBrightness: (aperture: number, shutter: number, iso: number) => number;
-	captured: any;
-	settings: {
-		iso: number;
-		shutterSpeed: number;
-		aperture: number;
-		sensorSize: string;
-		bladeCount: number;
-	};
+	computeBrightness: (aperture: number, shutter: number, iso: number) => number;
+	settings: CameraSettings;
 	setIso: (n: number) => void;
 	setAperture: (n: number) => void;
 	setShutterSpeed: (n: number) => void;
 	APERTURE_VALUES: number[];
 	ISO_VALUES: number[];
 	SHUTTER_VALUES: number[];
-};
+}
 
 const BASE_VIDEO_CONSTRAINTS: MediaTrackConstraints = {
 	facingMode: { ideal: "environment" },
@@ -36,7 +37,7 @@ const BASE_VIDEO_CONSTRAINTS: MediaTrackConstraints = {
 };
 
 export default function useCamera(): UseCameraResult {
-	const webcamRef = useRef<any>(null);
+	const webcamRef = useRef<Webcam>(null);
 	const [isCameraOn, setIsCameraOn] = useState(false);
 	const [useFacingMode, setUseFacingMode] = useState(true);
 
@@ -51,36 +52,33 @@ export default function useCamera(): UseCameraResult {
 	const [aperture, _setAperture] = useState(2.8);
 	const [shutterSpeed, _setShutterSpeed] = useState(1 / 125);
 
-	// helper to find nearest allowed value
-	const nearest = (arr: number[], v: number) => {
+	const nearest = useCallback((arr: number[], v: number) => {
 		let best = arr[0];
 		let bestDiff = Math.abs(arr[0] - v);
 		for (let i = 1; i < arr.length; i++) {
 			const d = Math.abs(arr[i] - v);
-			if (d < bestDiff) { best = arr[i]; bestDiff = d; }
+			if (d < bestDiff) {
+				best = arr[i];
+				bestDiff = d;
+			}
 		}
 		return best;
-	};
+	}, []);
 
-	const setIso = (n: number) => {
-		const v = nearest(ISO_VALUES, n);
-		_setIso(v);
-	};
+	const setIso = useCallback((n: number) => {
+		_setIso(nearest(ISO_VALUES, n));
+	}, [ISO_VALUES, nearest]);
 
-	const setAperture = (n: number) => {
-		const v = nearest(APERTURE_VALUES, n);
-		_setAperture(v);
-	};
+	const setAperture = useCallback((n: number) => {
+		_setAperture(nearest(APERTURE_VALUES, n));
+	}, [APERTURE_VALUES, nearest]);
 
-	const setShutterSpeed = (n: number) => {
-		const v = nearest(SHUTTER_VALUES, n);
-		_setShutterSpeed(v);
-	};
+	const setShutterSpeed = useCallback((n: number) => {
+		_setShutterSpeed(nearest(SHUTTER_VALUES, n));
+	}, [SHUTTER_VALUES, nearest]);
+
 	const [sensorSize] = useState("24x36");
 	const [bladeCount] = useState(9);
-
-	// `setCaptured` is currently unused — keep captured state but omit setter
-	const [captured] = useState<any>(null);
 
 	const videoConstraints = useFacingMode ? BASE_VIDEO_CONSTRAINTS : { width: 1280, height: 720, aspectRatio: 2 / 3 };
 
@@ -93,7 +91,7 @@ export default function useCamera(): UseCameraResult {
 
 	const onUserMedia = useCallback(() => {
 		try {
-			const v = (webcamRef.current as any)?.video as HTMLVideoElement | undefined;
+			const v = webcamRef.current?.video;
 			if (v) {
 				v.muted = true;
 				v.playsInline = true;
@@ -107,7 +105,7 @@ export default function useCamera(): UseCameraResult {
 		}
 	}, []);
 
-	const onUserMediaError = useCallback((err: any) => {
+	const onUserMediaError = useCallback((err: string | Error) => {
 		console.warn('useCamera onUserMediaError', err);
 		if (useFacingMode && err && /FacingMode|facingMode|Constraints|NotFoundError/i.test(String(err))) {
 			setUseFacingMode(false);
@@ -121,23 +119,17 @@ export default function useCamera(): UseCameraResult {
 	const stopCamera = useCallback(() => {
 		setIsCameraOn(false);
 		try {
-			const stream = webcamRef.current?.stream as MediaStream | undefined;
+			const stream = (webcamRef.current as any)?.stream as MediaStream | undefined;
 			if (stream) stream.getTracks().forEach(t => t.stop());
 		} catch (e) {
 			console.warn('useCamera: failed to stop tracks', e);
 		}
 	}, []);
 
-	const handleCapture = useCallback(() => {
-		// Capture disabled temporarily per request — no-op
-		console.log('handleCapture: disabled');
-		return null;
-	}, []);
-
 	useEffect(() => {
 		return () => {
 			try {
-				const stream = webcamRef.current?.stream as MediaStream | undefined;
+				const stream = (webcamRef.current as any)?.stream as MediaStream | undefined;
 				if (stream) stream.getTracks().forEach(t => t.stop());
 			} catch (e) {}
 		};
@@ -148,13 +140,11 @@ export default function useCamera(): UseCameraResult {
 		isCameraOn,
 		startCamera,
 		stopCamera,
-		handleCapture,
 		videoConstraints,
 		onUserMedia,
 		onUserMediaError,
 		computeFilter,
 		computeBrightness,
-		captured,
 		settings: { iso, shutterSpeed, aperture, sensorSize, bladeCount },
 		setIso,
 		setAperture,
