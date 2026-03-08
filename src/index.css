@@ -68,5 +68,5 @@
 
 /* 小さい画面では通常のレスポンシブ表示を維持 */
 @media (max-width: 899px) {
-	.phone-screen > * { width: 100%; height: auto; }
+	.phone-screen > * { width: 100%; height: 100%; }
 }
