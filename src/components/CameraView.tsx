@@ -1,26 +1,20 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useMemo } from "react";
 import Webcam from "react-webcam";
 import useCamera from "../hooks/useCamera";
 import { 
-	applyApertureEffects, 
+	applyDepthOfFieldFromVideo, // [改善]: 直接DOF関数を呼ぶように変更
 	applyFilmGrainOnCanvas, 
 	applyColorNoiseOnCanvas,
-	calculateLongExposureAlpha // [追加]: ヘルパーをインポート
+	calculateLongExposureAlpha
 } from "../utils/imageEffects";
 import CircularDial from "./CircularDial";
 import ExposureTriangle from "./ExposureTriangle";
 import "../App.css";
 
 // [追加]: F値連動ボケ計算ロジック
-/**
- * F値の文字列から数値を抽出し、それに基づいたブラー量（px）を返します。
- * F値が小さい（明るい）ほどボケが強く、F8以上でボケが消失するように設定。
- */
 const calculateBlurAmount = (fValueString: string): number => {
 	const fValue = parseFloat(fValueString.replace('F', ''));
 	if (isNaN(fValue)) return 0;
-	
-	// F1.4で最大8px、段階的に減衰させ、F8.0以上で0px（くっきり）
 	if (fValue <= 1.4) return 8;
 	if (fValue <= 2.0) return 6;
 	if (fValue <= 2.8) return 4;
@@ -56,6 +50,59 @@ const CameraView: React.FC = () => {
 	const lastTapRef = useRef<{ x: number; y: number } | null>(null);
 	const PROCESS_SCALE = 0.5;
 
+	// [改善]: 光芒処理用リソース
+	const starburstSpriteRef = useRef<HTMLCanvasElement | null>(null);
+	const detectionCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+	// [改善]: 高品質な光芒スプライトの事前生成
+	useEffect(() => {
+		const spriteSize = 256;
+		const canvas = document.createElement('canvas');
+		canvas.width = spriteSize;
+		canvas.height = spriteSize;
+		const ctx = canvas.getContext('2d');
+		if (!ctx) return;
+
+		const cx = spriteSize / 2;
+		const cy = spriteSize / 2;
+		const bladeCount = settings.bladeCount || 6;
+
+		// 1. 中心部のグロー（円形グラデーション）
+		const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, spriteSize * 0.15);
+		grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+		grad.addColorStop(0.4, 'rgba(255, 250, 230, 0.4)');
+		grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+		ctx.fillStyle = grad;
+		ctx.beginPath();
+		ctx.arc(cx, cy, spriteSize * 0.15, 0, Math.PI * 2);
+		ctx.fill();
+
+		// 2. 光の筋（先端が細く消えていく）
+		for (let i = 0; i < bladeCount; i++) {
+			const angle = (i * Math.PI * 2) / bladeCount;
+			ctx.save();
+			ctx.translate(cx, cy);
+			ctx.rotate(angle);
+
+			const rayLength = spriteSize * 0.4;
+			const rayWidth = 2;
+			const rayGrad = ctx.createLinearGradient(0, 0, rayLength, 0);
+			rayGrad.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
+			rayGrad.addColorStop(0.2, 'rgba(255, 252, 240, 0.4)');
+			rayGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+			ctx.fillStyle = rayGrad;
+			ctx.beginPath();
+			ctx.moveTo(0, -rayWidth / 2);
+			ctx.lineTo(rayLength, 0); // 先端を細く
+			ctx.lineTo(0, rayWidth / 2);
+			ctx.closePath();
+			ctx.fill();
+			ctx.restore();
+		}
+		starburstSpriteRef.current = canvas;
+	}, [settings.bladeCount]);
+
 	useEffect(() => {
 		let mounted = true;
 		let timer: number | null = null;
@@ -67,11 +114,9 @@ const CameraView: React.FC = () => {
 				const container = containerRef.current;
 				if (!video || !canvas || !container) return;
 
-				// コンテナの実測サイズに合わせてキャンバスを調整
 				const rect = container.getBoundingClientRect();
 				const cw = rect.width;
 				const ch = rect.height;
-
 				const finalCw = Math.max(1, Math.floor(cw * PROCESS_SCALE));
 				const finalCh = Math.max(1, Math.floor(ch * PROCESS_SCALE));
 
@@ -85,7 +130,7 @@ const CameraView: React.FC = () => {
 				const videoAspect = vw / vh;
 				const canvasAspect = cw / ch;
 
-				let sx, sy, sw, sh;
+				let sx: number, sy: number, sw: number, sh: number;
 				if (videoAspect > canvasAspect) {
 					sh = vh;
 					sw = vh * canvasAspect;
@@ -103,24 +148,83 @@ const CameraView: React.FC = () => {
 				const ty = tap ? tap.y : sy + sh / 2;
 
 				const brightness = computeBrightness(settings.aperture, settings.shutterSpeed, settings.iso);
-				
-				// [追加]: SS値に基づいた残像用のアルファ値を計算
 				const currentSSStr = settings.shutterSpeed < 1 ? `1/${Math.round(1/settings.shutterSpeed)}` : `${settings.shutterSpeed}`;
 				const { alpha } = calculateLongExposureAlpha(currentSSStr, 30);
 
-				// マッピング計算
 				const relativeX = (tx - sx) * (canvas.width / sw);
 				const relativeY = (ty - sy) * (canvas.height / sh);
 
-				// [追加]: alphaを渡して長秒露光をシミュレート
-				await applyApertureEffects(video, canvas, relativeX, relativeY, settings.aperture, settings.bladeCount, brightness, alpha);
+				const ctx = canvas.getContext('2d')!;
+
+				// [改善]: 旧 applyApertureEffects の代わりに直接 DOF 描画を実行
+				await applyDepthOfFieldFromVideo(video, canvas, relativeX, relativeY, settings.aperture, brightness, alpha);
+
+				// [改善]: 光芒（Starburst）処理
+				if (settings.aperture >= 8 && starburstSpriteRef.current) {
+					// 1. 極小キャンバスでの高輝度検出 (64x64)
+					if (!detectionCanvasRef.current) {
+						detectionCanvasRef.current = document.createElement('canvas');
+						detectionCanvasRef.current.width = 64;
+						detectionCanvasRef.current.height = 64;
+					}
+					const detCanvas = detectionCanvasRef.current;
+					const detCtx = detCanvas.getContext('2d', { willReadFrequently: true })!;
+					
+					// 映像をダウンスケールして描画
+					detCtx.drawImage(video, sx, sy, sw, sh, 0, 0, detCanvas.width, detCanvas.height);
+					const imgData = detCtx.getImageData(0, 0, detCanvas.width, detCanvas.height);
+					const data = imgData.data;
+					const threshold = 240;
+					const brightPoints: {x: number, y: number}[] = [];
+
+					// ピクセル走査（パフォーマンスのためステップ実行）
+					for (let i = 0; i < data.length; i += 4 * 2) { 
+						if (data[i] > threshold && data[i+1] > threshold && data[i+2] > threshold) {
+							const pixelIdx = i / 4;
+							const x = pixelIdx % detCanvas.width;
+							const y = Math.floor(pixelIdx / detCanvas.width);
+							brightPoints.push({ x, y });
+							if (brightPoints.length > 10) break; // 最大10箇所に制限
+						}
+					}
+
+					// 2. 加算合成による光芒描画
+					if (brightPoints.length > 0) {
+						ctx.save();
+						ctx.globalCompositeOperation = 'lighter';
+						
+						// F値に応じてサイズと不透明度を調整
+						// 強度を全体的に小さく調整
+						const fRatio = (settings.aperture - 8) / (16 - 8);
+						const starScale = 0.4 + fRatio * 0.8; 
+						ctx.globalAlpha = Math.min(1, 0.2 + fRatio * 0.4);
+
+						const sprite = starburstSpriteRef.current;
+						const sSize = sprite.width;
+
+						brightPoints.forEach(p => {
+							const targetX = (p.x / detCanvas.width) * canvas.width;
+							const targetY = (p.y / detCanvas.height) * canvas.height;
+							const drawSize = sSize * starScale;
+							ctx.drawImage(
+								sprite, 
+								targetX - drawSize / 2, 
+								targetY - drawSize / 2, 
+								drawSize, 
+								drawSize
+							);
+						});
+						ctx.restore();
+					}
+				}
+
 				applyFilmGrainOnCanvas(canvas, settings.iso);
 				applyColorNoiseOnCanvas(canvas, settings.iso, 0.28);
 			} catch (e) {
 				console.warn('processFrame failed', e);
 			}
 			if (!mounted) return;
-			timer = window.setTimeout(() => { requestAnimationFrame(processFrame); }, 33); // 30fps
+			timer = window.setTimeout(() => { requestAnimationFrame(processFrame); }, 33);
 		}
 
 		if (isCameraOn) processFrame();
@@ -180,7 +284,7 @@ const CameraView: React.FC = () => {
 			const canvasAspect = rect.width / rect.height;
 			const videoAspect = vw / vh;
 
-			let sx, sy, sw, sh;
+			let sx: number, sy: number, sw: number, sh: number;
 			if (videoAspect > canvasAspect) {
 				sh = vh;
 				sw = vh * canvasAspect;
@@ -204,7 +308,6 @@ const CameraView: React.FC = () => {
 
 	return (
 		<div className="camera-app-root">
-			{/* 1. Header: Settings and Info */}
 			<header className="camera-header">
 				<div className="flex gap-2">
 					<button 
@@ -221,7 +324,6 @@ const CameraView: React.FC = () => {
 				</button>
 			</header>
 
-			{/* 2. Main: Camera Preview Area */}
 			<main className="camera-main">
 				<div className="camera-preview-container" ref={containerRef}>
 					{isCameraOn ? (
@@ -241,7 +343,6 @@ const CameraView: React.FC = () => {
 							<canvas
 								ref={overlayCanvasRef}
 								className="absolute inset-0 w-full h-full cursor-crosshair"
-								// [追加]: F値連動ボケ処理 (filter: blur) と滑らかな遷移 (transition)
 								style={{ 
 									filter: `blur(${calculateBlurAmount(currentF)}px)`,
 									transition: 'filter 0.3s ease-in-out'
@@ -257,7 +358,6 @@ const CameraView: React.FC = () => {
 				</div>
 			</main>
 
-			{/* 3. Info: Exposure Values Bar */}
 			<div className="camera-info">
 				<div className="exposure-info-bar">
 					<div className="exposure-item">
@@ -275,16 +375,13 @@ const CameraView: React.FC = () => {
 				</div>
 			</div>
 
-			{/* 4. Footer: Controls */}
 			<footer className="camera-footer">
 				<div className="controls-layout">
-					{/* Left: Dial Section */}
 					<div className="dial-section">
 						<div className="relative w-full h-full">
 							{(() => {
-								// compact layout: lower the dial and reduce its overall size so footer is more compact
 								const centerX = 100;
-								const centerY = 130; // moved slightly down
+								const centerY = 130;
 								const radius = 84;
 								const angles = [-130, -90, -50];
 								const keys: Array<'ss'|'f'|'iso'> = ['ss','f','iso'];
@@ -319,7 +416,6 @@ const CameraView: React.FC = () => {
 						</div>
 					</div>
 
-					{/* Right: Shutter and Triangle */}
 					<div className="shutter-section">
 						<div className="triangle-container">
 							<ExposureTriangle
@@ -342,7 +438,6 @@ const CameraView: React.FC = () => {
 				</div>
 			</footer>
 
-			{/* Status Overlay */}
 			<div className="status-overlay">
 				{notice && (
 					<div className="bg-black/80 backdrop-blur-md px-6 py-3 rounded-full border border-white/20 shadow-2xl">

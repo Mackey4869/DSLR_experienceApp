@@ -123,7 +123,7 @@ export function applyStarburstOnCanvas(outCanvas: HTMLCanvasElement, aperture: n
         const cx = p.x;
         const cy = p.y;
         // scale alpha by aperture progression so stars appear gradually as aperture increases
-        const rawAlpha = Math.min(0.9, Math.max(0, (p.intensity - threshold) / 60));
+        const rawAlpha = Math.min(0.7, Math.max(0, (p.intensity - threshold) / 60));
         const baseAlpha = rawAlpha * tAperture;
 
         for (let b = 0; b < bladeCount; b++) {
@@ -131,10 +131,10 @@ export function applyStarburstOnCanvas(outCanvas: HTMLCanvasElement, aperture: n
             // draw multi-layered strokes along ray
             for (let layer = 0; layer < 5; layer++) {
                 const t = layer / 5;
-                const len = radianceR * (0.6 + 0.4 * (1 - t));
+                const len = radianceR * (0.5 + 0.5 * (1 - t));
                 ctx.beginPath();
-                ctx.strokeStyle = `rgba(255,240,200,${baseAlpha * (0.35 * (1 - t))})`;
-                ctx.lineWidth = lineWidth * (1 - 0.6 * t);
+                ctx.strokeStyle = `rgba(255,240,200,${baseAlpha * (0.25 * (1 - t))})`;
+                ctx.lineWidth = lineWidth * (0.8 - 0.5 * t);
                 ctx.moveTo(cx, cy);
                 const ex = cx + Math.cos(angle) * len;
                 const ey = cy + Math.sin(angle) * len;
