@@ -1,9 +1,17 @@
 import React, { useRef, useState, useEffect } from "react";
 import Webcam from "react-webcam";
 import useCamera from "../hooks/useCamera";
-import { applyApertureEffects, applyFilmGrainOnCanvas, applyColorNoiseOnCanvas } from "../utils/imageEffects";
+import useFrameProcessor from "../hooks/useFrameProcessor";
 import CircularDial from "./CircularDial";
 import ExposureTriangle from "./ExposureTriangle";
+import { 
+    calculateBlurAmount, 
+    getShutterNote, 
+    getApertureNote, 
+    getIsoNote, 
+    formatShutterSpeed, 
+    formatAperture 
+} from "../utils/helpers";
 import "../App.css";
 
 const CameraView: React.FC = () => {
@@ -12,13 +20,11 @@ const CameraView: React.FC = () => {
 		isCameraOn,
 		startCamera,
 		stopCamera,
-		handleCapture,
 		videoConstraints,
 		onUserMedia,
 		onUserMediaError,
 		computeFilter,
 		computeBrightness,
-		captured,
 		settings,
 		setIso,
 		setAperture,
@@ -31,152 +37,130 @@ const CameraView: React.FC = () => {
 	const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const lastTapRef = useRef<{ x: number; y: number } | null>(null);
-	const PROCESS_SCALE = 0.5;
+	const starburstSpriteRef = useRef<HTMLCanvasElement | null>(null);
+	const [capturedImage, setCapturedImage] = useState<string | null>(null);
+	const [isFlashing, setIsFlashing] = useState(false);
+    const [selectedMode, setSelectedMode] = useState<'ss'|'f'|'iso'>('ss');
+	const [notice] = useState("");
 
+    // Frame processing logic moved to hook
+    useFrameProcessor({
+        webcamRef,
+        overlayCanvasRef,
+        containerRef,
+        isCameraOn,
+        settings,
+        computeBrightness,
+        starburstSpriteRef,
+        lastTapRef
+    });
+
+	// Starburst sprite generation
 	useEffect(() => {
-		let mounted = true;
-		let timer: number | null = null;
+		const spriteSize = 256;
+		const canvas = document.createElement('canvas');
+		canvas.width = spriteSize;
+		canvas.height = spriteSize;
+		const ctx = canvas.getContext('2d');
+		if (!ctx) return;
 
-		async function processFrame() {
-			try {
-				const video = (webcamRef.current as any)?.video as HTMLVideoElement | undefined;
-				const canvas = overlayCanvasRef.current;
-				const container = containerRef.current;
-				if (!video || !canvas || !container) return;
+		const cx = spriteSize / 2;
+		const cy = spriteSize / 2;
+		const bladeCount = settings.bladeCount || 6;
 
-				// コンテナの実測サイズに合わせてキャンバスを調整
-				const rect = container.getBoundingClientRect();
-				const cw = rect.width;
-				const ch = rect.height;
+		const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, spriteSize * 0.15);
+		grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+		grad.addColorStop(0.4, 'rgba(255, 250, 230, 0.4)');
+		grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+		ctx.fillStyle = grad;
+		ctx.beginPath();
+		ctx.arc(cx, cy, spriteSize * 0.15, 0, Math.PI * 2);
+		ctx.fill();
 
-				const finalCw = Math.max(1, Math.floor(cw * PROCESS_SCALE));
-				const finalCh = Math.max(1, Math.floor(ch * PROCESS_SCALE));
+		for (let i = 0; i < bladeCount; i++) {
+			const angle = (i * Math.PI * 2) / bladeCount;
+			ctx.save();
+			ctx.translate(cx, cy);
+			ctx.rotate(angle);
 
-				if (canvas.width !== finalCw || canvas.height !== finalCh) {
-					canvas.width = finalCw;
-					canvas.height = finalCh;
-				}
+			const rayLength = spriteSize * 0.4;
+			const rayWidth = 2;
+			const rayGrad = ctx.createLinearGradient(0, 0, rayLength, 0);
+			rayGrad.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
+			rayGrad.addColorStop(0.2, 'rgba(255, 252, 240, 0.4)');
+			rayGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
-				const vw = video.videoWidth || 1;
-				const vh = video.videoHeight || 1;
-				const videoAspect = vw / vh;
-				const canvasAspect = cw / ch;
-
-				let sx, sy, sw, sh;
-				if (videoAspect > canvasAspect) {
-					sh = vh;
-					sw = vh * canvasAspect;
-					sx = (vw - sw) / 2;
-					sy = 0;
-				} else {
-					sw = vw;
-					sh = vw / canvasAspect;
-					sx = 0;
-					sy = (vh - sh) / 2;
-				}
-
-				const tap = lastTapRef.current;
-				const tx = tap ? tap.x : sx + sw / 2;
-				const ty = tap ? tap.y : sy + sh / 2;
-
-				const brightness = computeBrightness(settings.aperture, settings.shutterSpeed, settings.iso);
-				
-				// マッピング計算
-				const relativeX = (tx - sx) * (canvas.width / sw);
-				const relativeY = (ty - sy) * (canvas.height / sh);
-
-				await applyApertureEffects(video, canvas, relativeX, relativeY, settings.aperture, settings.bladeCount, brightness);
-				applyFilmGrainOnCanvas(canvas, settings.iso);
-				applyColorNoiseOnCanvas(canvas, settings.iso, 0.28);
-			} catch (e) {
-				console.warn('processFrame failed', e);
-			}
-			if (!mounted) return;
-			timer = window.setTimeout(() => { requestAnimationFrame(processFrame); }, 33); // 30fps
+			ctx.fillStyle = rayGrad;
+			ctx.beginPath();
+			ctx.moveTo(0, -rayWidth / 2);
+			ctx.lineTo(rayLength, 0); 
+			ctx.lineTo(0, rayWidth / 2);
+			ctx.closePath();
+			ctx.fill();
+			ctx.restore();
 		}
+		starburstSpriteRef.current = canvas;
+	}, [settings.bladeCount]);
 
-		if (isCameraOn) processFrame();
-		return () => { mounted = false; if (timer) clearTimeout(timer); };
-	}, [isCameraOn, settings.aperture, settings.bladeCount, settings.iso, settings.shutterSpeed, computeBrightness]);
-
-	const [selectedMode, setSelectedMode] = useState<'ss'|'f'|'iso'>('ss');
-	const [notice, setNotice] = useState("");
-
-	const getShutterNote = () => {
-		const recip = Math.round(1 / settings.shutterSpeed);
-		if (recip >= 125) return '動体○';
-		if (recip <= 60) return 'ブレに注意';
-		return '';
-	};
-
-	const getApertureNote = () => {
-		const a = settings.aperture;
-		if (a >= 2.8 && a <= 4) return 'ボケやすい';
-		if (a >= 4.5 && a <= 10) return 'バランス型';
-		if (a >= 11 && a <= 16) return '光芒出現';
-		return '';
-	};
-
-	const getIsoNote = () => {
-		const iso = settings.iso;
-		if (iso >= 100 && iso <= 400) return '低ノイズ';
-		if (iso >= 800 && iso <= 1600) return '中ノイズ';
-		if (iso >= 3200 && iso <= 6400) return '高ノイズ';
-		return '';
-	};
-
-	const ssList = SHUTTER_VALUES.map(v => v < 1 ? `1/${Math.round(1/v)}` : `${v}`);
-	const fList = APERTURE_VALUES.map(v => `F${v.toFixed(1)}`);
+	const ssList = SHUTTER_VALUES.map(v => formatShutterSpeed(v));
+	const fList = APERTURE_VALUES.map(v => formatAperture(v));
 	const isoList = ISO_VALUES.map(v => `${v}`);
 
-	const currentSS = settings.shutterSpeed < 1 ? `1/${Math.round(1/settings.shutterSpeed)}` : `${settings.shutterSpeed}`;
-	const currentF = `F${settings.aperture.toFixed(1)}`;
+	const currentSS = formatShutterSpeed(settings.shutterSpeed);
+	const currentF = formatAperture(settings.aperture);
 	const currentISO = `${settings.iso}`;
 
 	const handleLabelClick = (type: 'SS' | 'F' | 'ISO') => {
 		setSelectedMode(type.toLowerCase() as 'ss' | 'f' | 'iso');
 	};
 
-	const handlePreviewClick = async (ev: React.MouseEvent<HTMLCanvasElement>) => {
-		try {
-			const video = (webcamRef.current as any)?.video as HTMLVideoElement | undefined;
-			const canvas = overlayCanvasRef.current;
-			if (!video || !canvas) return;
+	const handlePreviewClick = (ev: React.MouseEvent<HTMLCanvasElement>) => {
+		const video = webcamRef.current?.video;
+		const canvas = overlayCanvasRef.current;
+		if (!video || !canvas) return;
 
-			const rect = canvas.getBoundingClientRect();
-			const clickX = ev.clientX - rect.left;
-			const clickY = ev.clientY - rect.top;
+		const rect = canvas.getBoundingClientRect();
+		const clickX = ev.clientX - rect.left;
+		const clickY = ev.clientY - rect.top;
 
-			const vw = video.videoWidth || 1;
-			const vh = video.videoHeight || 1;
-			const canvasAspect = rect.width / rect.height;
-			const videoAspect = vw / vh;
+		const vw = video.videoWidth || 1;
+		const vh = video.videoHeight || 1;
+		const canvasAspect = rect.width / rect.height;
+		const videoAspect = vw / vh;
 
-			let sx, sy, sw, sh;
-			if (videoAspect > canvasAspect) {
-				sh = vh;
-				sw = vh * canvasAspect;
-				sx = (vw - sw) / 2;
-				sy = 0;
-			} else {
-				sw = vw;
-				sh = vw / canvasAspect;
-				sx = 0;
-				sy = (vh - sh) / 2;
-			}
-
-			const tx = sx + (clickX / rect.width) * sw;
-			const ty = sy + (clickY / rect.height) * sh;
-
-			lastTapRef.current = { x: tx, y: ty };
-		} catch (e) {
-			console.warn('apply effects failed', e);
+		let sx: number, sy: number, sw: number, sh: number;
+		if (videoAspect > canvasAspect) {
+			sh = vh;
+			sw = vh * canvasAspect;
+			sx = (vw - sw) / 2;
+			sy = 0;
+		} else {
+			sw = vw;
+			sh = vw / canvasAspect;
+			sx = 0;
+			sy = (vh - sh) / 2;
 		}
+
+		const tx = sx + (clickX / rect.width) * sw;
+		const ty = sy + (clickY / rect.height) * sh;
+
+		lastTapRef.current = { x: tx, y: ty };
+	};
+
+	const handleCapturePhoto = () => {
+		const canvas = overlayCanvasRef.current;
+		if (!canvas) return;
+
+		setIsFlashing(true);
+		setTimeout(() => setIsFlashing(false), 200);
+
+		const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+		setCapturedImage(dataUrl);
+		stopCamera();
 	};
 
 	return (
 		<div className="camera-app-root">
-			{/* 1. Header: Settings and Info */}
 			<header className="camera-header">
 				<div className="flex gap-2">
 					<button 
@@ -193,7 +177,6 @@ const CameraView: React.FC = () => {
 				</button>
 			</header>
 
-			{/* 2. Main: Camera Preview Area */}
 			<main className="camera-main">
 				<div className="camera-preview-container" ref={containerRef}>
 					{isCameraOn ? (
@@ -213,6 +196,10 @@ const CameraView: React.FC = () => {
 							<canvas
 								ref={overlayCanvasRef}
 								className="absolute inset-0 w-full h-full cursor-crosshair"
+								style={{ 
+									filter: `blur(${calculateBlurAmount(settings.aperture)}px)`,
+									transition: 'filter 0.3s ease-in-out'
+								}}
 								onClick={handlePreviewClick}
 							/>
 						</>
@@ -221,60 +208,55 @@ const CameraView: React.FC = () => {
 							<span className="text-sm font-medium tracking-widest opacity-50">Camera_Off</span>
 						</div>
 					)}
+
+					{isFlashing && (
+						<div className="absolute inset-0 bg-white z-[100] animate-pulse pointer-events-none" />
+					)}
 				</div>
 			</main>
 
-			{/* 3. Info: Exposure Values Bar */}
 			<div className="camera-info">
 				<div className="exposure-info-bar">
 					<div className="exposure-item">
-						<span className="exposure-label">SS 1/{Math.round(1 / settings.shutterSpeed)}</span>
-						<span className="exposure-note">{getShutterNote()}</span>
+						<span className="exposure-label">SS {formatShutterSpeed(settings.shutterSpeed)}</span>
+						<span className="exposure-note">{getShutterNote(settings.shutterSpeed)}</span>
 					</div>
 					<div className="exposure-item">
-						<span className="exposure-label">F{settings.aperture.toFixed(1)}</span>
-						<span className="exposure-note">{getApertureNote()}</span>
+						<span className="exposure-label">{formatAperture(settings.aperture)}</span>
+						<span className="exposure-note">{getApertureNote(settings.aperture)}</span>
 					</div>
 					<div className="exposure-item">
 						<span className="exposure-label">ISO {settings.iso}</span>
-						<span className="exposure-note">{getIsoNote()}</span>
+						<span className="exposure-note">{getIsoNote(settings.iso)}</span>
 					</div>
 				</div>
 			</div>
 
-			{/* 4. Footer: Controls */}
 			<footer className="camera-footer">
 				<div className="controls-layout">
-					{/* Left: Dial Section */}
 					<div className="dial-section">
 						<div className="relative w-full h-full">
-							{(() => {
-								// compact layout: lower the dial and reduce its overall size so footer is more compact
-								const centerX = 100;
-								const centerY = 130; // moved slightly down
-								const radius = 84;
-								const angles = [-130, -90, -50];
-								const keys: Array<'ss'|'f'|'iso'> = ['ss','f','iso'];
-								return ['SS','F','ISO'].map((label, idx) => {
-									const theta = (angles[idx] * Math.PI) / 180;
-									const x = Math.round(centerX + radius * Math.cos(theta));
-									const y = Math.round(centerY + radius * Math.sin(theta));
-									const mode = keys[idx];
-									const isActive = selectedMode === mode;
-									return (
-										<div
-											key={label}
-											className="absolute flex items-center justify-center z-30 cursor-pointer"
-											style={{ left: x - 24, top: y - 24, width: 48, height: 48 }}
-											onClick={() => setSelectedMode(mode)}
-										>
-											<div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold transition-all ${isActive ? 'bg-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.5)]' : 'bg-neutral-800 text-gray-400 border border-white/5'}`}>
-												{label}
-											</div>
+							{['SS','F','ISO'].map((label, idx) => {
+                                const angles = [-130, -90, -50];
+                                const keys: Array<'ss'|'f'|'iso'> = ['ss','f','iso'];
+								const theta = (angles[idx] * Math.PI) / 180;
+								const x = Math.round(100 + 84 * Math.cos(theta));
+								const y = Math.round(130 + 84 * Math.sin(theta));
+								const mode = keys[idx];
+								const isActive = selectedMode === mode;
+								return (
+									<div
+										key={label}
+										className="absolute flex items-center justify-center z-30 cursor-pointer"
+										style={{ left: x - 24, top: y - 24, width: 48, height: 48 }}
+										onClick={() => setSelectedMode(mode)}
+									>
+										<div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold transition-all ${isActive ? 'bg-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.5)]' : 'bg-neutral-800 text-gray-400 border border-white/5'}`}>
+											{label}
 										</div>
-									);
-								});
-							})()}
+									</div>
+								);
+							})}
 
 							<div className="absolute inset-0 pointer-events-none">
 								<div className="absolute" style={{ left: 100 - 64, top: 130 - 64, width: 128, height: 128, pointerEvents: 'auto' }}>
@@ -286,7 +268,6 @@ const CameraView: React.FC = () => {
 						</div>
 					</div>
 
-					{/* Right: Shutter and Triangle */}
 					<div className="shutter-section">
 						<div className="triangle-container">
 							<ExposureTriangle
@@ -300,7 +281,7 @@ const CameraView: React.FC = () => {
 							/>
 						</div>
 						<button 
-							onClick={() => { setNotice('保存機能はこれから実装します'); setTimeout(() => setNotice(''), 1800); handleCapture(); }}
+							onClick={handleCapturePhoto}
 							className="w-[72px] h-[72px] rounded-full bg-white border-[4px] border-neutral-300 active:scale-95 transition-transform flex items-center justify-center shadow-2xl"
 						>
 							<span className="material-symbols-outlined text-neutral-900 text-3xl">photo_camera</span>
@@ -309,7 +290,6 @@ const CameraView: React.FC = () => {
 				</div>
 			</footer>
 
-			{/* Status Overlay */}
 			<div className="status-overlay">
 				{notice && (
 					<div className="bg-black/80 backdrop-blur-md px-6 py-3 rounded-full border border-white/20 shadow-2xl">
@@ -318,9 +298,41 @@ const CameraView: React.FC = () => {
 				)}
 			</div>
 			
-			{captured && (
-				<div className="absolute bottom-4 right-4 p-1 bg-white rounded shadow-2xl z-[60] rotate-3 animate-in fade-in zoom-in duration-300">
-					<img src={captured.image} alt="capture" className="w-16 h-auto rounded-sm" />
+			{capturedImage && (
+				<div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-300">
+					<div className="relative w-full max-w-[500px] aspect-[2/3] bg-neutral-900 rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/10">
+						<img 
+							src={capturedImage} 
+							alt="Captured" 
+							className="w-full h-full object-cover"
+							style={{ 
+								filter: `blur(${calculateBlurAmount(settings.aperture)}px)`,
+							}}
+						/>
+						
+						<div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent">
+							<div className="flex items-center justify-between text-white/90">
+								<div className="flex flex-col">
+									<span className="text-[10px] uppercase tracking-[0.2em] opacity-50 mb-1">Exposure Settings</span>
+									<div className="flex gap-4 font-mono text-sm font-bold">
+										<span>{currentSS}</span>
+										<span>{currentF}</span>
+										<span>ISO {currentISO}</span>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+					
+					<button 
+						onClick={() => {
+							startCamera();
+							setCapturedImage(null);
+						}}
+						className="mt-8 px-8 py-3 rounded-full bg-white text-black font-bold text-sm tracking-widest active:scale-95 transition-transform"
+					>
+						BACK TO CAMERA
+					</button>
 				</div>
 			)}
 		</div>
