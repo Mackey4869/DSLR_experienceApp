@@ -91,7 +91,7 @@ const CameraView: React.FC = () => {
 			</div>
 
 			{/* Camera preview area (2:3 aspect) */}
-			<div className="w-[80%] max-w-[360px] mt-1" style={{ aspectRatio: '2 / 3', position: 'relative' }}>
+			<div className="w-[95%] max-w-none mt-1 px-2" style={{ aspectRatio: '2 / 3', position: 'relative' }}>
 				<div className="absolute inset-0 rounded-md overflow-hidden border" style={{ borderColor: '#222', background: '#000' }}>
 					{isCameraOn ? (
 						<>
