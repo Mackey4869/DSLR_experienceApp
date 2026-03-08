@@ -183,8 +183,8 @@ const CameraView: React.FC = () => {
 				</div>
 				{/* small overlay info */}
 				<div style={{ position: 'absolute', left: '4%', bottom: '6%', width: '92%', display: 'flex', justifyContent: 'space-around', color: '#ffffff', fontFamily: 'monospace', fontSize: '0.8rem' }}>
-					<span>F{settings.aperture.toFixed(1)}</span>
 					<span>SS 1/{Math.round(1 / settings.shutterSpeed)}</span>
+					<span>F{settings.aperture.toFixed(1)}</span>
 					<span>ISO {settings.iso}</span>
 				</div>
 			</div>
