@@ -3,15 +3,38 @@ import { apertureToDof, apertureToStarburst, MAX_APERTURE } from './apertureSett
 // Apply depth-of-field: blur everything except a circular region centered at (cx, cy)
 export async function applyDepthOfFieldFromVideo(video: HTMLVideoElement, outCanvas: HTMLCanvasElement, cx: number, cy: number, aperture: number, brightnessMultiplier = 1) {
     // Blur/DOF disabled per request: draw video directly and apply global brightness only.
-    const w = video.videoWidth || video.clientWidth;
-    const h = video.videoHeight || video.clientHeight;
-    outCanvas.width = w;
-    outCanvas.height = h;
+    const vw = video.videoWidth || video.clientWidth;
+    const vh = video.videoHeight || video.clientHeight;
+    const cw = outCanvas.width;
+    const ch = outCanvas.height;
+
+    if (vw === 0 || vh === 0 || cw === 0 || ch === 0) return;
 
     const ctx = outCanvas.getContext('2d')!;
-    ctx.clearRect(0, 0, w, h);
+    ctx.clearRect(0, 0, cw, ch);
+
+    // Calculate "cover" dimensions: maintain aspect ratio and crop to fill
+    const videoAspect = vw / vh;
+    const canvasAspect = cw / ch;
+
+    let sx, sy, sw, sh;
+    if (videoAspect > canvasAspect) {
+        // Video is wider than canvas: crop width
+        sh = vh;
+        sw = vh * canvasAspect;
+        sx = (vw - sw) / 2;
+        sy = 0;
+    } else {
+        // Video is taller than canvas: crop height
+        sw = vw;
+        sh = vw / canvasAspect;
+        sx = 0;
+        sy = (vh - sh) / 2;
+    }
+
     ctx.filter = `brightness(${brightnessMultiplier})`;
-    ctx.drawImage(video, 0, 0, w, h);
+    // Draw the cropped portion of the video to fill the entire canvas
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch);
     ctx.filter = 'none';
 }
 

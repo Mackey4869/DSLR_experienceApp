@@ -45,21 +45,35 @@ const CameraView: React.FC = () => {
 				const canvas = overlayCanvasRef.current;
 				if (!video || !canvas) return;
 
-				// ensure canvas internal size matches scaled video size
+				// ensure canvas internal size matches 2:3 aspect ratio scaled for performance
 				const vw = video.videoWidth || Math.max(1, video.clientWidth);
 				const vh = video.videoHeight || Math.max(1, video.clientHeight);
-				const cw = Math.max(1, Math.floor(vw * PROCESS_SCALE));
-				const ch = Math.max(1, Math.floor(vh * PROCESS_SCALE));
-				if (canvas.width !== cw || canvas.height !== ch) {
-					canvas.width = cw;
-					canvas.height = ch;
+				const TARGET_ASPECT = 2 / 3;
+
+				let cw, ch;
+				if (vw / vh > TARGET_ASPECT) {
+					// video is wider than 2:3 (e.g. 16:9)
+					ch = vh;
+					cw = vh * TARGET_ASPECT;
+				} else {
+					// video is narrower/taller than 2:3
+					cw = vw;
+					ch = vw / TARGET_ASPECT;
+				}
+
+				const finalCw = Math.max(1, Math.floor(cw * PROCESS_SCALE));
+				const finalCh = Math.max(1, Math.floor(ch * PROCESS_SCALE));
+
+				if (canvas.width !== finalCw || canvas.height !== finalCh) {
+					canvas.width = finalCw;
+					canvas.height = finalCh;
 				}
 
 				const tap = lastTapRef.current;
 				const tx = tap ? tap.x : vw / 2;
 				const ty = tap ? tap.y : vh / 2;
-				const sx = canvas.width / vw;
-				const sy = canvas.height / vh;
+				const sx = canvas.width / cw; // Note: sx/sy here are for scaling effects if needed, but applyApertureEffects handles its own mapping now
+				const sy = canvas.height / ch;
 				const brightness = computeBrightness(settings.aperture, settings.shutterSpeed, settings.iso);
 				await applyApertureEffects(video, canvas, tx * sx, ty * sy, settings.aperture, settings.bladeCount, brightness);
 				// apply film-like luminance noise depending on ISO
@@ -117,18 +131,42 @@ const CameraView: React.FC = () => {
 										const video = (webcamRef.current as any)?.video as HTMLVideoElement | undefined;
 										const canvas = overlayCanvasRef.current;
 										if (!video || !canvas) return;
-										// compute click pos relative to element and scale to video pixels
+										// compute click pos relative to element
 										const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
 										const clickX = ev.clientX - rect.left;
 										const clickY = ev.clientY - rect.top;
-										// scale to video natural size
-										const sx = video.videoWidth / rect.width;
-										const sy = video.videoHeight / rect.height;
-										const tx = clickX * sx;
-										const ty = clickY * sy;
+
+										const vw = video.videoWidth || video.clientWidth;
+										const vh = video.videoHeight || video.clientHeight;
+										const TARGET_ASPECT = 2 / 3;
+
+										// Calculate the same 'cover' crop used in rendering to map coordinates back
+										const videoAspect = vw / vh;
+										const canvasAspect = TARGET_ASPECT;
+
+										let sx, sy, sw, sh;
+										if (videoAspect > canvasAspect) {
+											sh = vh;
+											sw = vh * canvasAspect;
+											sx = (vw - sw) / 2;
+											sy = 0;
+										} else {
+											sw = vw;
+											sh = vw / canvasAspect;
+											sx = 0;
+											sy = (vh - sh) / 2;
+										}
+
+										// Map click on canvas (rect.width x rect.height) to source video (sw x sh) starting at (sx, sy)
+										const tx = sx + (clickX / rect.width) * sw;
+										const ty = sy + (clickY / rect.height) * sh;
+
 										lastTapRef.current = { x: tx, y: ty };
 										const brightness = computeBrightness(settings.aperture, settings.shutterSpeed, settings.iso);
-										await applyApertureEffects(video, canvas, tx, ty, settings.aperture, settings.bladeCount, brightness);
+										// Use canvas dimensions for effect scaling
+										const scaleX = canvas.width / sw;
+										const scaleY = canvas.height / sh;
+										await applyApertureEffects(video, canvas, (tx - sx) * scaleX, (ty - sy) * scaleY, settings.aperture, settings.bladeCount, brightness);
 										// apply film-like luminance noise depending on ISO
 										applyFilmGrainOnCanvas(canvas, settings.iso);
 										// add light color noise (chrominance)
@@ -153,7 +191,7 @@ const CameraView: React.FC = () => {
 
 
 			{/* Controls: single dial at bottom-left with 3 arc-buttons (SS, F, ISO) */}
-			<div style={{ position: 'absolute', left: 12, bottom: 12, width: 220, height: 220 }}>
+			<div style={{ position: 'absolute', left: -8, bottom: 4, width: 220, height: 220 }}>
 				<div style={{ position: 'relative', width: '100%', height: '100%' }}>
 					{/* dial center coordinates (relative to this container) */}
 					{(() => {
