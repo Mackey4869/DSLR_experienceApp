@@ -243,7 +243,7 @@ const CameraView: React.FC = () => {
 
 
 			{/* Controls: single dial at bottom-left with 3 arc-buttons (SS, F, ISO) */}
-			<div style={{ position: 'absolute', left: -8, bottom: 4, width: 220, height: 220 }}>
+				<div style={{ position: 'absolute', left: 12, bottom: 4, width: 220, height: 220 }}>
 				<div style={{ position: 'relative', width: '100%', height: '100%' }}>
 					{/* dial center coordinates (relative to this container) */}
 					{(() => {
@@ -297,7 +297,7 @@ const CameraView: React.FC = () => {
 			</div>
 
 				{/* Capture (shutter) button at bottom-right */}
-				<div style={{ position: 'absolute', right: 28, bottom: 28, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+				<div style={{ position: 'absolute', right: 36, bottom: 28, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
 				{/* 露出の三角形をシャッターボタンの上に配置（少し左下にオフセット） */}
 				<div style={{ width: 120, marginBottom: -20, marginLeft: -10 }}>
 					<ExposureTriangle

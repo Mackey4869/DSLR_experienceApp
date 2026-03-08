@@ -62,7 +62,9 @@ const ExposureTriangle: React.FC<ExposureTriangleProps> = ({
   const innerPolygonPoints = useMemo(() => {
     const p1 = getPoint(angles.ISO, getValueRatio(isoList, currentISO));
     const p2 = getPoint(angles.SS, getValueRatio(ssList, currentSS));
-    const p3 = getPoint(angles.F, getValueRatio(fList, currentF));
+    // For F axis we invert the ratio so that larger F (e.g. F16) is closer to center
+    const ratioF = getValueRatio(fList, currentF);
+    const p3 = getPoint(angles.F, 1 - ratioF);
     return `${p1} ${p2} ${p3}`;
   }, [isoList, currentISO, ssList, currentSS, fList, currentF]);
 
