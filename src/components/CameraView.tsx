@@ -5,6 +5,7 @@ import useFrameProcessor from "../hooks/useFrameProcessor";
 import CircularDial from "./CircularDial";
 import ExposureTriangle from "./ExposureTriangle";
 import InfoScreen from "./InfoScreen"; 
+import ExposureInfoScreen from "./ExposureInfoScreen";
 import { GalleryScreen } from "./GalleryScreen"; 
 import PhotoPreview from "./PhotoPreview";
 import { 
@@ -45,13 +46,13 @@ const CameraView: React.FC = () => {
 	const [isFlashing, setIsFlashing] = useState(false);
 	const [selectedMode, setSelectedMode] = useState<'ss'|'f'|'iso'>('ss');
 	
-	// [変更]: activeView 状態の追加 (デフォルトは 'camera')
-	const [activeView, setActiveView] = useState<'camera' | 'info' | 'gallery'>('camera');
+	// [変更]: activeView 状態の追加 (exposure を追加)
+	const [activeView, setActiveView] = useState<'camera' | 'info' | 'gallery' | 'exposure'>('camera');
 	const [isTryingMode, setIsTryingMode] = useState(false);
 	const [notice] = useState("");
 
 	// [追加]: タブ切り替え時のカメラ制御
-	const handleViewChange = (view: 'camera' | 'info' | 'gallery') => {
+	const handleViewChange = (view: 'camera' | 'info' | 'gallery' | 'exposure') => {
 		setActiveView(view);
 		if (view !== 'camera') {
 			stopCamera(); // カメラ以外の画面ではストリームを停止
@@ -254,6 +255,11 @@ const CameraView: React.FC = () => {
 						</>
 					) : activeView === 'info' ? (
 						<InfoScreen />
+					) : activeView === 'exposure' ? (
+						<ExposureInfoScreen onBack={() => {
+							setActiveView('camera');
+							startCamera();
+						}} />
 					) : (
 						<GalleryScreen 
 							currentSS={currentSS}
@@ -349,6 +355,7 @@ const CameraView: React.FC = () => {
 								currentF={currentF}
 								currentISO={currentISO}
 								onLabelClick={handleLabelClick}
+								onInfoClick={() => handleViewChange('exposure')}
 							/>
 						</div>
 						<button 
