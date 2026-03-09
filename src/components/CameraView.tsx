@@ -4,7 +4,9 @@ import useCamera from "../hooks/useCamera";
 import useFrameProcessor from "../hooks/useFrameProcessor";
 import CircularDial from "./CircularDial";
 import ExposureTriangle from "./ExposureTriangle";
-import InfoScreen from "./InfoScreen"; // [追加]: InfoScreenのインポート
+import InfoScreen from "./InfoScreen"; 
+import { GalleryScreen } from "./GalleryScreen"; 
+import PhotoPreview from "./PhotoPreview";
 import { 
     calculateBlurAmount, 
     getShutterNote, 
@@ -45,6 +47,7 @@ const CameraView: React.FC = () => {
 	
 	// [変更]: activeView 状態の追加 (デフォルトは 'camera')
 	const [activeView, setActiveView] = useState<'camera' | 'info' | 'gallery'>('camera');
+	const [isTryingMode, setIsTryingMode] = useState(false);
 	const [notice] = useState("");
 
 	// [追加]: タブ切り替え時のカメラ制御
@@ -52,6 +55,7 @@ const CameraView: React.FC = () => {
 		setActiveView(view);
 		if (view !== 'camera') {
 			stopCamera(); // カメラ以外の画面ではストリームを停止
+			setIsTryingMode(false); // ビュー変更時にリセット
 		}
 	};
 
@@ -251,9 +255,24 @@ const CameraView: React.FC = () => {
 					) : activeView === 'info' ? (
 						<InfoScreen />
 					) : (
-						<div className="w-full h-full flex flex-col items-center justify-center text-gray-500 bg-neutral-900">
-							<span className="text-sm font-medium tracking-widest opacity-50">Gallery: 開発中</span>
-						</div>
+						<GalleryScreen 
+							currentSS={currentSS}
+							currentF={currentF}
+							currentISO={currentISO}
+							onTryModeChange={(isTrying) => setIsTryingMode(isTrying)}
+						/>
+					)}
+
+					{/* Captured Image Preview within Display */}
+					{capturedImage && (
+						<PhotoPreview 
+							image={capturedImage}
+							settings={settings}
+							onBack={() => {
+								startCamera();
+								setCapturedImage(null);
+							}}
+						/>
 					)}
 
 					{isFlashing && (
@@ -262,7 +281,7 @@ const CameraView: React.FC = () => {
 				</div>
 			</main>
 
-			<div className="camera-info">
+			<div className={`camera-info ${isTryingMode ? 'is-trying' : ''}`}>
 				<div className="exposure-info-bar">
 					<div className="exposure-item">
 						<span className="exposure-label text-yellow-500">SS {formatShutterSpeed(settings.shutterSpeed)}</span>
@@ -345,44 +364,6 @@ const CameraView: React.FC = () => {
 					</div>
 				)}
 			</div>
-			
-			{capturedImage && (
-				<div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-300">
-					<div className="relative w-full max-w-[500px] aspect-[2/3] bg-neutral-900 rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/10">
-						<img 
-							src={capturedImage} 
-							alt="Captured" 
-							className="w-full h-full object-cover"
-							style={{ 
-								filter: `blur(${calculateBlurAmount(settings.aperture)}px)`,
-							}}
-						/>
-						
-						<div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent">
-							<div className="flex items-center justify-between text-white/90">
-								<div className="flex flex-col">
-									<span className="text-[10px] uppercase tracking-[0.2em] opacity-50 mb-1">Exposure Settings</span>
-									<div className="flex gap-4 font-mono text-sm font-bold">
-										<span>{currentSS}</span>
-										<span>{currentF}</span>
-										<span>ISO {currentISO}</span>
-									</div>
-								</div>
-							</div>
-						</div>
-					</div>
-					
-					<button 
-						onClick={() => {
-							startCamera();
-							setCapturedImage(null);
-						}}
-						className="mt-8 px-8 py-3 rounded-full bg-white text-black font-bold text-sm tracking-widest active:scale-95 transition-transform"
-					>
-						BACK TO CAMERA
-					</button>
-				</div>
-			)}
 		</div>
 	);
 };
