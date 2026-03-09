@@ -22,13 +22,15 @@ interface GalleryScreenProps {
   currentF: string;
   currentISO: string;
   onTryModeChange: (isTrying: boolean) => void;
+  onSettingsChange?: (settings: { ss: number; f: number; iso: number }) => void;
 }
 
 export const GalleryScreen: React.FC<GalleryScreenProps> = ({ 
   currentSS, 
   currentF, 
   currentISO, 
-  onTryModeChange 
+  onTryModeChange,
+  onSettingsChange
 }) => {
   // [変更]: 状態管理の追加 (ポップアップ用と試すモード用)
   const [selectedPhotoForPopup, setSelectedPhotoForPopup] = useState<PhotoData | null>(null);
@@ -74,39 +76,48 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
   }, [tryingPhoto, onTryModeChange]);
 
   // --- ヘルパー: 設定値の数値化 ---
-  const getValues = () => {
-    // SS: "1/125" -> 0.008, "30\"" -> 30
+  // [修正]: 再編集のリアルタイム反映 - 文字列から数値への変換を共通化
+  const parseSettings = (settings: ExposureSettings) => {
     let ssNum = 1/125;
-    if (currentSS.includes('/')) {
-      const [n, d] = currentSS.split('/').map(Number);
+    if (settings.ss.includes('/')) {
+      const [n, d] = settings.ss.split('/').map(Number);
       ssNum = n / d;
     } else {
-      ssNum = parseFloat(currentSS.replace('"', ''));
+      ssNum = parseFloat(settings.ss.replace(/[^\d.]/g, ''));
     }
     
-    const fNum = parseFloat(currentF.replace('f/', ''));
-    const isoNum = parseInt(currentISO);
+    // "f/2.8" or "F2.8" -> 2.8
+    const fNum = parseFloat(settings.f.replace(/[^\d.]/g, ''));
+    const isoNum = parseInt(settings.iso.replace(/[^\d]/g, ''));
     
     return { ssNum, fNum, isoNum };
   };
 
-  // [変更]: リアルタイムエフェクトの計算 (試すモード用)
+  // [修正]: 再編集のリアルタイム反映 - 現在のダイヤル値を数値化
+  const getValues = () => parseSettings({
+    ss: currentSS,
+    f: currentF,
+    iso: currentISO
+  });
+
+  // [修正]: 再編集のリアルタイム反映 - リアルタイムエフェクトの計算
   const visualEffects = useMemo(() => {
-    if (!tryingPhoto) return {};
+    if (!tryingPhoto) return { filter: 'none', noiseOpacity: 0 };
     
-    const { ssNum, fNum, isoNum } = getValues();
-    const currentEV = evForISO(fNum, ssNum, isoNum);
+    const current = getValues();
+    const photo = parseSettings(tryingPhoto.settings);
     
-    // 基準となる明るさ（このモック写真が適正露出だったと仮定）からの差分
-    // ここでは f/5.6, 1/125, ISO 100 を基準（適正）としてシミュレート
-    const baselineEV = evForISO(5.6, 1/125, 100);
-    const brightness = brightnessMultiplierFromEV(currentEV, baselineEV);
+    // 1. 明るさ (Brightness): 露出計算ロジックを用いて計算
+    // 写真が撮られた際の設定を基準(Baseline)として、現在の設定との差分を計算
+    const photoEV = evForISO(photo.fNum, photo.ssNum, photo.isoNum);
+    const currentEV = evForISO(current.fNum, current.ssNum, current.isoNum);
+    const brightness = brightnessMultiplierFromEV(currentEV, photoEV);
     
-    // F値によるボケ (f/2.8で4px, f/16で0px程度の簡易計算)
-    const blur = Math.max(0, (11 - fNum) * 0.8);
+    // 2. ボケ (Blur): F値が小さいほど大きくなる (F1.4で最大、F11以上で最小)
+    const blur = Math.max(0, (14 - current.fNum) * 0.6);
     
-    // ISOによるノイズ強度 (0.0 ~ 1.0)
-    const noiseOpacity = Math.max(0, Math.pow(Math.log2(isoNum / 100) / 6, 2) * 0.4);
+    // 3. ノイズ (Noise): ISO値が大きいほど不透明度が上がる
+    const noiseOpacity = Math.max(0, Math.pow(Math.log2(current.isoNum / 100) / 6, 2) * 0.6);
 
     return {
       filter: `brightness(${brightness}) blur(${blur}px)`,
@@ -114,7 +125,7 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
     };
   }, [tryingPhoto, currentSS, currentF, currentISO]);
 
-  // --- [変更]: 試すモード (フルスクリーン表示) ---
+  // --- [修正]: 再編集のリアルタイム反映 - 試すモード (フルスクリーン表示) ---
   if (tryingPhoto) {
     return (
       <div className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center">
@@ -123,16 +134,16 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
           <img 
             src={tryingPhoto.imageUrl} 
             alt="Trying photo" 
-            className="w-full h-full object-cover transition-all duration-200"
+            className="w-full h-full object-cover transition-all duration-300 ease-out"
             style={{ filter: visualEffects.filter }}
           />
           
           {/* ノイズオーバーレイ (ISOシミュレーション) */}
           <div 
-            className="absolute inset-0 pointer-events-none mix-blend-screen bg-repeat opacity-0"
+            className="absolute inset-0 pointer-events-none mix-blend-screen bg-repeat transition-opacity duration-300"
             style={{ 
               opacity: visualEffects.noiseOpacity,
-              backgroundImage: `url('https://www.transparenttextures.com/patterns/stardust.png')`, // 簡易的なノイズテクスチャ
+              backgroundImage: `url('https://www.transparenttextures.com/patterns/stardust.png')`,
               backgroundSize: '200px 200px'
             }}
           />
@@ -235,6 +246,14 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
                 </button>
                 <button 
                   onClick={() => {
+                    if (onSettingsChange) {
+                      const numericSettings = parseSettings(selectedPhotoForPopup.settings);
+                      onSettingsChange({
+                        ss: numericSettings.ssNum,
+                        f: numericSettings.fNum,
+                        iso: numericSettings.isoNum
+                      });
+                    }
                     setTryingPhoto(selectedPhotoForPopup);
                     setSelectedPhotoForPopup(null);
                   }}
