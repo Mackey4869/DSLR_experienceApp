@@ -6,6 +6,7 @@ import CircularDial from "./CircularDial";
 import ExposureTriangle from "./ExposureTriangle";
 import InfoScreen from "./InfoScreen"; 
 import { GalleryScreen } from "./GalleryScreen"; 
+import PhotoPreview from "./PhotoPreview";
 import { 
     calculateBlurAmount, 
     getShutterNote, 
@@ -262,6 +263,18 @@ const CameraView: React.FC = () => {
 						/>
 					)}
 
+					{/* Captured Image Preview within Display */}
+					{capturedImage && (
+						<PhotoPreview 
+							image={capturedImage}
+							settings={settings}
+							onBack={() => {
+								startCamera();
+								setCapturedImage(null);
+							}}
+						/>
+					)}
+
 					{isFlashing && (
 						<div className="absolute inset-0 bg-white z-[100] animate-pulse pointer-events-none" />
 					)}
@@ -351,44 +364,6 @@ const CameraView: React.FC = () => {
 					</div>
 				)}
 			</div>
-			
-			{capturedImage && (
-				<div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-300">
-					<div className="relative w-full max-w-[500px] aspect-[2/3] bg-neutral-900 rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/10">
-						<img 
-							src={capturedImage} 
-							alt="Captured" 
-							className="w-full h-full object-cover"
-							style={{ 
-								filter: `blur(${calculateBlurAmount(settings.aperture)}px)`,
-							}}
-						/>
-						
-						<div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent">
-							<div className="flex items-center justify-between text-white/90">
-								<div className="flex flex-col">
-									<span className="text-[10px] uppercase tracking-[0.2em] opacity-50 mb-1">Exposure Settings</span>
-									<div className="flex gap-4 font-mono text-sm font-bold">
-										<span>{currentSS}</span>
-										<span>{currentF}</span>
-										<span>ISO {currentISO}</span>
-									</div>
-								</div>
-							</div>
-						</div>
-					</div>
-					
-					<button 
-						onClick={() => {
-							startCamera();
-							setCapturedImage(null);
-						}}
-						className="mt-8 px-8 py-3 rounded-full bg-white text-black font-bold text-sm tracking-widest active:scale-95 transition-transform"
-					>
-						BACK TO CAMERA
-					</button>
-				</div>
-			)}
 		</div>
 	);
 };
