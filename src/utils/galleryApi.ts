@@ -81,41 +81,9 @@ export const uploadGalleryPost = async (
 
     if (insertError) throw insertError;
     return data;
-  } catch (error) {
+    } catch (error) {
     console.error('Upload failed:', error);
     throw error;
-  }
-};
-
-/**
- * 3. 投稿と画像を削除
- * @param id 削除対象のレコードID (UUID)
- * @param imageUrl 削除対象の画像URL
- */
-export const deleteGalleryPost = async (id: string, imageUrl: string): Promise<void> => {
-  try {
-    // 1. URLからファイル名を抽出
-    const fileName = imageUrl.split('/').pop();
-    if (!fileName) throw new Error('Invalid image URL');
-
-    // 2. DBからレコード削除
-    const { error: dbError } = await supabase
-      .from('gallery_posts')
-      .delete()
-      .eq('id', id);
-    
-    if (dbError) throw dbError;
-
-    // 3. Storageからファイル削除
-    const { error: storageError } = await supabase.storage
-      .from('gallery_images')
-      .remove([fileName]);
-
-    if (storageError) {
-      console.warn('DB record deleted, but storage removal failed:', storageError);
     }
-  } catch (error) {
-    console.error('Delete failed:', error);
-    throw error;
-  }
-};
+    };
+

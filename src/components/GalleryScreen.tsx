@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { evForISO, brightnessMultiplierFromEV } from '../utils/exposureCalc';
-import { fetchGalleryPosts, deleteGalleryPost } from '../utils/galleryApi';
+import { fetchGalleryPosts } from '../utils/galleryApi';
 import type { GalleryPost } from '../utils/galleryApi';
 
 // --- 型定義 ---
@@ -35,7 +35,6 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
   const [tryingPhoto, setTryingPhoto] = useState<PhotoData | null>(null);
   const [posts, setPosts] = useState<PhotoData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isDeleting, setIsDeleting] = useState(false);
   
   // データの取得
   const loadPosts = async () => {
@@ -73,22 +72,6 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
   useEffect(() => {
     onTryModeChange(tryingPhoto !== null);
   }, [tryingPhoto, onTryModeChange]);
-
-  const handleDelete = async (id: string, imageUrl: string) => {
-    if (!window.confirm('この投稿を削除しますか？')) return;
-    
-    setIsDeleting(true);
-    try {
-      await deleteGalleryPost(id, imageUrl);
-      setSelectedPhotoForPopup(null);
-      await loadPosts(); // リストを更新
-    } catch (error) {
-      console.error('Delete failed:', error);
-      alert('削除に失敗しました。');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
 
   // --- ヘルパー: 設定値の数値化 ---
   const getValues = () => {
@@ -221,7 +204,7 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
       {selectedPhotoForPopup && (
         <div 
           className="absolute inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
-          onClick={() => !isDeleting && setSelectedPhotoForPopup(null)}
+          onClick={() => setSelectedPhotoForPopup(null)}
         >
           <div 
             className="bg-gray-900 w-full max-w-xs rounded-3xl overflow-hidden shadow-2xl border border-white/10 animate-in zoom-in-95 duration-200"
@@ -234,13 +217,6 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
                 alt="Selected" 
                 className="w-full h-full object-cover"
               />
-              <button
-                onClick={() => handleDelete(selectedPhotoForPopup.id, selectedPhotoForPopup.imageUrl)}
-                disabled={isDeleting}
-                className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 text-white/70 flex items-center justify-center hover:bg-red-600 hover:text-white transition-colors disabled:opacity-50"
-              >
-                <span className="material-symbols-outlined text-sm">delete</span>
-              </button>
             </div>
             
             {/* コンテンツ */}
@@ -253,8 +229,7 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
               <div className="flex gap-3">
                 <button 
                   onClick={() => setSelectedPhotoForPopup(null)}
-                  disabled={isDeleting}
-                  className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-white text-sm font-bold rounded-xl transition-colors active:scale-95 disabled:opacity-50"
+                  className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-white text-sm font-bold rounded-xl transition-colors active:scale-95"
                 >
                   キャンセル
                 </button>
@@ -263,8 +238,7 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
                     setTryingPhoto(selectedPhotoForPopup);
                     setSelectedPhotoForPopup(null);
                   }}
-                  disabled={isDeleting}
-                  className="flex-1 py-3 bg-amber-400 hover:bg-amber-300 text-black text-sm font-bold rounded-xl shadow-lg shadow-amber-400/20 transition-colors active:scale-95 disabled:opacity-50"
+                  className="flex-1 py-3 bg-amber-400 hover:bg-amber-300 text-black text-sm font-bold rounded-xl shadow-lg shadow-amber-400/20 transition-colors active:scale-95"
                 >
                   試す
                 </button>
