@@ -4,7 +4,8 @@ import useCamera from "../hooks/useCamera";
 import useFrameProcessor from "../hooks/useFrameProcessor";
 import CircularDial from "./CircularDial";
 import ExposureTriangle from "./ExposureTriangle";
-import InfoScreen from "./InfoScreen"; // [追加]: InfoScreenのインポート
+import InfoScreen from "./InfoScreen"; 
+import { GalleryScreen } from "./GalleryScreen"; 
 import { 
     calculateBlurAmount, 
     getShutterNote, 
@@ -251,9 +252,7 @@ const CameraView: React.FC = () => {
 					) : activeView === 'info' ? (
 						<InfoScreen />
 					) : (
-						<div className="w-full h-full flex flex-col items-center justify-center text-gray-500 bg-neutral-900">
-							<span className="text-sm font-medium tracking-widest opacity-50">Gallery: 開発中</span>
-						</div>
+						<GalleryScreen />
 					)}
 
 					{isFlashing && (
