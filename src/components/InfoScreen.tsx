@@ -58,6 +58,28 @@ const InfoScreen: React.FC = () => {
               高感度にすると暗い場所でも明るくなりますが、デジタル特有のノイズが発生します。
             </p>
           </section>
+
+          <section className="group pt-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-1 h-6 bg-amber-500 rounded-full" />
+              <h2 className="text-lg font-bold tracking-tight text-white group-hover:text-amber-400 transition-colors">
+                Gallery & Simulation
+              </h2>
+            </div>
+            <div className="space-y-3 pl-4 border-l border-neutral-800 ml-0.5">
+              <p className="text-sm text-gray-400 leading-relaxed">
+                <span className="text-gray-200 font-bold block mb-1">■ ギャラリー閲覧</span>
+                世界中のユーザーが撮影したシミュレーション結果を閲覧できます。各写真には撮影時の露出設定が記録されています。
+              </p>
+              <p className="text-sm text-gray-400 leading-relaxed">
+                <span className="text-gray-200 font-bold block mb-1">■ 「試す」モード</span>
+                ギャラリー内の写真を選択して「試す」ボタンを押すと、その写真に対して現在のダイヤル設定をリアルタイムに反映できます。
+              </p>
+              <p className="text-sm text-gray-400 leading-relaxed italic text-[11px]">
+                ※同じ被写体・環境でも、設定を変えることで表現がどう変わるかを直感的に学習するための機能です。
+              </p>
+            </div>
+          </section>
         </div>
 
         {/* Footer info */}
