@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { evForISO, brightnessMultiplierFromEV } from '../utils/exposureCalc';
+import { fetchGalleryPosts, deleteGalleryPost } from '../utils/galleryApi';
+import type { GalleryPost } from '../utils/galleryApi';
 
 // --- 型定義 ---
 type ExposureSettings = {
@@ -22,43 +24,6 @@ interface GalleryScreenProps {
   onTryModeChange: (isTrying: boolean) => void;
 }
 
-// --- モックデータの生成 ---
-const GENERATE_MOCK_DATA = (): PhotoData[] => {
-  const dummyPhotos: PhotoData[] = [
-    {
-      id: '1',
-      imageUrl: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=800&q=80',
-      settings: { ss: '1/1000', f: 'f/2.8', iso: '100' },
-    },
-    {
-      id: '2',
-      imageUrl: 'https://images.unsplash.com/photo-1493246507139-91e8bef99c02?w=800&q=80',
-      settings: { ss: '1/60', f: 'f/8.0', iso: '400' },
-    },
-    {
-      id: '3',
-      imageUrl: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&q=80',
-      settings: { ss: '30"', f: 'f/11', iso: '100' },
-    },
-    {
-      id: '4',
-      imageUrl: 'https://images.unsplash.com/photo-1500622388414-8055b16410e4?w=800&q=80',
-      settings: { ss: '1/250', f: 'f/1.8', iso: '800' },
-    },
-    {
-      id: '5',
-      imageUrl: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800&q=80',
-      settings: { ss: '1/4000', f: 'f/4.0', iso: '200' },
-    },
-  ];
-
-  const totalSlots = 30;
-  const remainingSlots = totalSlots - dummyPhotos.length;
-  const emptySlots = Array(remainingSlots).fill(null);
-
-  return [...dummyPhotos, ...emptySlots];
-};
-
 export const GalleryScreen: React.FC<GalleryScreenProps> = ({ 
   currentSS, 
   currentF, 
@@ -68,13 +33,62 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
   // [変更]: 状態管理の追加 (ポップアップ用と試すモード用)
   const [selectedPhotoForPopup, setSelectedPhotoForPopup] = useState<PhotoData | null>(null);
   const [tryingPhoto, setTryingPhoto] = useState<PhotoData | null>(null);
+  const [posts, setPosts] = useState<PhotoData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
   
-  const galleryData = useMemo(() => GENERATE_MOCK_DATA(), []);
+  // データの取得
+  const loadPosts = async () => {
+    setIsLoading(true);
+    try {
+      const data = await fetchGalleryPosts();
+      
+      // GalleryPost[] -> PhotoData[] への変換
+      const mappedPosts: PhotoData[] = data.map(post => ({
+        id: post.id,
+        imageUrl: post.image_url,
+        settings: {
+          ss: post.ss,
+          f: post.f,
+          iso: post.iso
+        }
+      }));
+
+      // 30スロット分を埋める
+      const totalSlots = 30;
+      const emptySlots = Array(Math.max(0, totalSlots - mappedPosts.length)).fill(null);
+      setPosts([...mappedPosts, ...emptySlots]);
+    } catch (error) {
+      console.error('Failed to load gallery:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPosts();
+  }, []);
 
   // [変更]: 試すモードの切り替えを親に通知
   useEffect(() => {
     onTryModeChange(tryingPhoto !== null);
   }, [tryingPhoto, onTryModeChange]);
+
+  const handleDelete = async (id: string, imageUrl: string) => {
+    if (!window.confirm('この投稿を削除しますか？')) return;
+    
+    setIsDeleting(true);
+    try {
+      await deleteGalleryPost(id, imageUrl);
+      setSelectedPhotoForPopup(null);
+      await loadPosts(); // リストを更新
+    } catch (error) {
+      console.error('Delete failed:', error);
+      alert('削除に失敗しました。');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // --- ヘルパー: 設定値の数値化 ---
   const getValues = () => {
@@ -165,55 +179,68 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
-        <div className="grid grid-cols-3 gap-2 md:gap-3">
-          {galleryData.map((photo, index) => (
-            <div 
-              key={photo?.id || `empty-${index}`}
-              className="relative aspect-square rounded-lg overflow-hidden group cursor-pointer border border-gray-800/50"
-              onClick={() => photo && setSelectedPhotoForPopup(photo)}
-            >
-              {photo ? (
-                <>
-                  <img 
-                    src={photo.imageUrl} 
-                    alt={`Photo ${photo.id}`} 
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
-                    <span className="text-[9px] text-white font-mono leading-none">
-                      {photo.settings.ss} · {photo.settings.f}
+        {isLoading && posts.length === 0 ? (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-2 md:gap-3">
+            {posts.map((photo, index) => (
+              <div 
+                key={photo?.id || `empty-${index}`}
+                className="relative aspect-square rounded-lg overflow-hidden group cursor-pointer border border-gray-800/50"
+                onClick={() => photo && setSelectedPhotoForPopup(photo)}
+              >
+                {photo ? (
+                  <>
+                    <img 
+                      src={photo.imageUrl} 
+                      alt={`Photo ${photo.id}`} 
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
+                      <span className="text-[9px] text-white font-mono leading-none">
+                        {photo.settings.ss} · {photo.settings.f}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="w-full h-full bg-gray-900/30 flex items-center justify-center border border-dashed border-gray-800">
+                    <span className="material-symbols-outlined text-gray-800 text-xl select-none">
+                      add_a_photo
                     </span>
                   </div>
-                </>
-              ) : (
-                <div className="w-full h-full bg-gray-900/30 flex items-center justify-center border border-dashed border-gray-800">
-                  <span className="material-symbols-outlined text-gray-800 text-xl select-none">
-                    add_a_photo
-                  </span>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* [変更]: ポップアップ (モーダル) 実装 */}
       {selectedPhotoForPopup && (
         <div 
           className="absolute inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
-          onClick={() => setSelectedPhotoForPopup(null)}
+          onClick={() => !isDeleting && setSelectedPhotoForPopup(null)}
         >
           <div 
             className="bg-gray-900 w-full max-w-xs rounded-3xl overflow-hidden shadow-2xl border border-white/10 animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             {/* サムネイル */}
-            <div className="w-full aspect-video overflow-hidden">
+            <div className="w-full aspect-video overflow-hidden relative">
               <img 
                 src={selectedPhotoForPopup.imageUrl} 
                 alt="Selected" 
                 className="w-full h-full object-cover"
               />
+              <button
+                onClick={() => handleDelete(selectedPhotoForPopup.id, selectedPhotoForPopup.imageUrl)}
+                disabled={isDeleting}
+                className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 text-white/70 flex items-center justify-center hover:bg-red-600 hover:text-white transition-colors disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-sm">delete</span>
+              </button>
             </div>
             
             {/* コンテンツ */}
@@ -226,7 +253,8 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
               <div className="flex gap-3">
                 <button 
                   onClick={() => setSelectedPhotoForPopup(null)}
-                  className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-white text-sm font-bold rounded-xl transition-colors active:scale-95"
+                  disabled={isDeleting}
+                  className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-white text-sm font-bold rounded-xl transition-colors active:scale-95 disabled:opacity-50"
                 >
                   キャンセル
                 </button>
@@ -235,7 +263,8 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
                     setTryingPhoto(selectedPhotoForPopup);
                     setSelectedPhotoForPopup(null);
                   }}
-                  className="flex-1 py-3 bg-amber-400 hover:bg-amber-300 text-black text-sm font-bold rounded-xl shadow-lg shadow-amber-400/20 transition-colors active:scale-95"
+                  disabled={isDeleting}
+                  className="flex-1 py-3 bg-amber-400 hover:bg-amber-300 text-black text-sm font-bold rounded-xl shadow-lg shadow-amber-400/20 transition-colors active:scale-95 disabled:opacity-50"
                 >
                   試す
                 </button>

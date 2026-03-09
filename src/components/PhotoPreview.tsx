@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { calculateBlurAmount, formatShutterSpeed, formatAperture } from '../utils/helpers';
+import { uploadGalleryPost } from '../utils/galleryApi';
 
 interface PhotoPreviewProps {
   image: string;
@@ -13,6 +14,7 @@ interface PhotoPreviewProps {
 
 const PhotoPreview: React.FC<PhotoPreviewProps> = ({ image, onBack, settings }) => {
   const [showConfirm, setShowConfirm] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   const currentSS = formatShutterSpeed(settings.shutterSpeed);
   const currentF = formatAperture(settings.aperture);
@@ -22,11 +24,23 @@ const PhotoPreview: React.FC<PhotoPreviewProps> = ({ image, onBack, settings }) 
     setShowConfirm(true);
   };
 
-  const confirmPost = () => {
-    // 実際の投稿処理はここでは行わず、UIのみ実装
-    alert('投稿しました（デモ）');
-    setShowConfirm(false);
-    onBack();
+  const confirmPost = async () => {
+    setIsUploading(true);
+    try {
+      await uploadGalleryPost(image, {
+        ss: currentSS,
+        f: currentF,
+        iso: currentISO,
+      });
+      alert('ギャラリーに投稿しました！');
+      setShowConfirm(false);
+      onBack();
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('投稿に失敗しました。通信環境を確認してください。');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
