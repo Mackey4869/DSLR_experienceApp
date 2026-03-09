@@ -6,7 +6,8 @@ import PhoneFrame from './components/PhoneFrame'
 const App: React.FC = () => {
   return (
     <PhoneFrame>
-      <div className="min-h-[100svh] text-white bg-gradient-to-b from-gray-900 to-gray-800">
+      {/* [修正]: PCフレーム内での高さはみ出し対応 */}
+      <div className="h-full min-h-[100svh] min-[900px]:min-h-full text-white bg-gradient-to-b from-gray-900 to-gray-800">
         {/* ルートをカメラ画面に変更（Home は不要） */}
         <Routes>
           <Route path="/" element={<CameraView />} />

@@ -12,6 +12,13 @@
   position: relative;
 }
 
+/* [修正]: PCフレーム内での高さはみ出し対応 */
+@media (min-width: 900px) {
+  .camera-app-root {
+    height: 100%;
+  }
+}
+
 /* 1. Header (新設): 最上部 */
 .camera-header {
   flex-shrink: 0;
