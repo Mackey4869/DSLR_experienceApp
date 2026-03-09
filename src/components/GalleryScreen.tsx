@@ -139,24 +139,6 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
               backgroundSize: '200px 200px'
             }}
           />
-
-          {/* ガイド情報 (現在の設定を表示) */}
-          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full border border-white/20 flex gap-4 text-xs font-mono text-white shadow-xl">
-            <div className="flex flex-col items-center">
-              <span className="text-[8px] text-gray-400">SS</span>
-              <span className="text-amber-400">{currentSS}</span>
-            </div>
-            <div className="w-[1px] bg-white/10" />
-            <div className="flex flex-col items-center">
-              <span className="text-[8px] text-gray-400">F</span>
-              <span className="text-amber-400">{currentF}</span>
-            </div>
-            <div className="w-[1px] bg-white/10" />
-            <div className="flex flex-col items-center">
-              <span className="text-[8px] text-gray-400">ISO</span>
-              <span className="text-amber-400">{currentISO}</span>
-            </div>
-          </div>
         </div>
 
         {/* 戻るボタン */}

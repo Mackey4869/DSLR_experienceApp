@@ -268,7 +268,7 @@ const CameraView: React.FC = () => {
 				</div>
 			</main>
 
-			<div className="camera-info">
+			<div className={`camera-info ${isTryingMode ? 'is-trying' : ''}`}>
 				<div className="exposure-info-bar">
 					<div className="exposure-item">
 						<span className="exposure-label text-yellow-500">SS {formatShutterSpeed(settings.shutterSpeed)}</span>

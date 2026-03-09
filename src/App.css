@@ -72,6 +72,21 @@
   background: rgba(0, 0, 0, 0.5);
   border-top: 1px solid rgba(255, 255, 255, 0.05);
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background-color 0.3s ease;
+}
+
+.camera-info.is-trying {
+  /* 編集（トライ）モード時は背景を強く変えず、文字色で強調する */
+  background: rgba(0, 0, 0, 0.5);
+  border-top-color: rgba(234, 179, 8, 0.08);
+  border-bottom-color: rgba(234, 179, 8, 0.08);
+}
+
+/* 強調は背景ではなく文字色で行う（背景色が誤って付くケースを防ぐ） */
+.camera-info.is-trying .exposure-label,
+.camera-info.is-trying .exposure-note {
+  color: #F59E0B; /* tailwind の yellow-500 と同等 */
+  background: transparent !important;
 }
 
 .exposure-info-bar {
