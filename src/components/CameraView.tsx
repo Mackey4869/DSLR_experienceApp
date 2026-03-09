@@ -46,6 +46,7 @@ const CameraView: React.FC = () => {
 	
 	// [変更]: activeView 状態の追加 (デフォルトは 'camera')
 	const [activeView, setActiveView] = useState<'camera' | 'info' | 'gallery'>('camera');
+	const [isTryingMode, setIsTryingMode] = useState(false);
 	const [notice] = useState("");
 
 	// [追加]: タブ切り替え時のカメラ制御
@@ -53,6 +54,7 @@ const CameraView: React.FC = () => {
 		setActiveView(view);
 		if (view !== 'camera') {
 			stopCamera(); // カメラ以外の画面ではストリームを停止
+			setIsTryingMode(false); // ビュー変更時にリセット
 		}
 	};
 
@@ -252,7 +254,12 @@ const CameraView: React.FC = () => {
 					) : activeView === 'info' ? (
 						<InfoScreen />
 					) : (
-						<GalleryScreen />
+						<GalleryScreen 
+							currentSS={currentSS}
+							currentF={currentF}
+							currentISO={currentISO}
+							onTryModeChange={(isTrying) => setIsTryingMode(isTrying)}
+						/>
 					)}
 
 					{isFlashing && (
