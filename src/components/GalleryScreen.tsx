@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { evForISO, brightnessMultiplierFromEV } from '../utils/exposureCalc';
+import { fetchGalleryPosts } from '../utils/galleryApi';
+import type { GalleryPost } from '../utils/galleryApi';
 
 // --- 型定義 ---
 type ExposureSettings = {
@@ -20,56 +22,53 @@ interface GalleryScreenProps {
   currentF: string;
   currentISO: string;
   onTryModeChange: (isTrying: boolean) => void;
+  onSettingsChange?: (settings: { ss: number; f: number; iso: number }) => void;
 }
-
-// --- モックデータの生成 ---
-const GENERATE_MOCK_DATA = (): PhotoData[] => {
-  const dummyPhotos: PhotoData[] = [
-    {
-      id: '1',
-      imageUrl: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=800&q=80',
-      settings: { ss: '1/1000', f: 'f/2.8', iso: '100' },
-    },
-    {
-      id: '2',
-      imageUrl: 'https://images.unsplash.com/photo-1493246507139-91e8bef99c02?w=800&q=80',
-      settings: { ss: '1/60', f: 'f/8.0', iso: '400' },
-    },
-    {
-      id: '3',
-      imageUrl: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&q=80',
-      settings: { ss: '30"', f: 'f/11', iso: '100' },
-    },
-    {
-      id: '4',
-      imageUrl: 'https://images.unsplash.com/photo-1500622388414-8055b16410e4?w=800&q=80',
-      settings: { ss: '1/250', f: 'f/1.8', iso: '800' },
-    },
-    {
-      id: '5',
-      imageUrl: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800&q=80',
-      settings: { ss: '1/4000', f: 'f/4.0', iso: '200' },
-    },
-  ];
-
-  const totalSlots = 30;
-  const remainingSlots = totalSlots - dummyPhotos.length;
-  const emptySlots = Array(remainingSlots).fill(null);
-
-  return [...dummyPhotos, ...emptySlots];
-};
 
 export const GalleryScreen: React.FC<GalleryScreenProps> = ({ 
   currentSS, 
   currentF, 
   currentISO, 
-  onTryModeChange 
+  onTryModeChange,
+  onSettingsChange
 }) => {
   // [変更]: 状態管理の追加 (ポップアップ用と試すモード用)
   const [selectedPhotoForPopup, setSelectedPhotoForPopup] = useState<PhotoData | null>(null);
   const [tryingPhoto, setTryingPhoto] = useState<PhotoData | null>(null);
+  const [posts, setPosts] = useState<PhotoData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
-  const galleryData = useMemo(() => GENERATE_MOCK_DATA(), []);
+  // データの取得
+  const loadPosts = async () => {
+    setIsLoading(true);
+    try {
+      const data = await fetchGalleryPosts();
+      
+      // GalleryPost[] -> PhotoData[] への変換
+      const mappedPosts: PhotoData[] = data.map(post => ({
+        id: post.id,
+        imageUrl: post.image_url,
+        settings: {
+          ss: post.ss,
+          f: post.f,
+          iso: post.iso
+        }
+      }));
+
+      // 30スロット分を埋める
+      const totalSlots = 30;
+      const emptySlots = Array(Math.max(0, totalSlots - mappedPosts.length)).fill(null);
+      setPosts([...mappedPosts, ...emptySlots]);
+    } catch (error) {
+      console.error('Failed to load gallery:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPosts();
+  }, []);
 
   // [変更]: 試すモードの切り替えを親に通知
   useEffect(() => {
@@ -77,39 +76,48 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
   }, [tryingPhoto, onTryModeChange]);
 
   // --- ヘルパー: 設定値の数値化 ---
-  const getValues = () => {
-    // SS: "1/125" -> 0.008, "30\"" -> 30
+  // [修正]: 再編集のリアルタイム反映 - 文字列から数値への変換を共通化
+  const parseSettings = (settings: ExposureSettings) => {
     let ssNum = 1/125;
-    if (currentSS.includes('/')) {
-      const [n, d] = currentSS.split('/').map(Number);
+    if (settings.ss.includes('/')) {
+      const [n, d] = settings.ss.split('/').map(Number);
       ssNum = n / d;
     } else {
-      ssNum = parseFloat(currentSS.replace('"', ''));
+      ssNum = parseFloat(settings.ss.replace(/[^\d.]/g, ''));
     }
     
-    const fNum = parseFloat(currentF.replace('f/', ''));
-    const isoNum = parseInt(currentISO);
+    // "f/2.8" or "F2.8" -> 2.8
+    const fNum = parseFloat(settings.f.replace(/[^\d.]/g, ''));
+    const isoNum = parseInt(settings.iso.replace(/[^\d]/g, ''));
     
     return { ssNum, fNum, isoNum };
   };
 
-  // [変更]: リアルタイムエフェクトの計算 (試すモード用)
+  // [修正]: 再編集のリアルタイム反映 - 現在のダイヤル値を数値化
+  const getValues = () => parseSettings({
+    ss: currentSS,
+    f: currentF,
+    iso: currentISO
+  });
+
+  // [修正]: 再編集のリアルタイム反映 - リアルタイムエフェクトの計算
   const visualEffects = useMemo(() => {
-    if (!tryingPhoto) return {};
+    if (!tryingPhoto) return { filter: 'none', noiseOpacity: 0 };
     
-    const { ssNum, fNum, isoNum } = getValues();
-    const currentEV = evForISO(fNum, ssNum, isoNum);
+    const current = getValues();
+    const photo = parseSettings(tryingPhoto.settings);
     
-    // 基準となる明るさ（このモック写真が適正露出だったと仮定）からの差分
-    // ここでは f/5.6, 1/125, ISO 100 を基準（適正）としてシミュレート
-    const baselineEV = evForISO(5.6, 1/125, 100);
-    const brightness = brightnessMultiplierFromEV(currentEV, baselineEV);
+    // 1. 明るさ (Brightness): 露出計算ロジックを用いて計算
+    // 写真が撮られた際の設定を基準(Baseline)として、現在の設定との差分を計算
+    const photoEV = evForISO(photo.fNum, photo.ssNum, photo.isoNum);
+    const currentEV = evForISO(current.fNum, current.ssNum, current.isoNum);
+    const brightness = brightnessMultiplierFromEV(currentEV, photoEV);
     
-    // F値によるボケ (f/2.8で4px, f/16で0px程度の簡易計算)
-    const blur = Math.max(0, (11 - fNum) * 0.8);
+    // 2. ボケ (Blur): F値が小さいほど大きくなる (F1.4で最大、F11以上で最小)
+    const blur = Math.max(0, (14 - current.fNum) * 0.6);
     
-    // ISOによるノイズ強度 (0.0 ~ 1.0)
-    const noiseOpacity = Math.max(0, Math.pow(Math.log2(isoNum / 100) / 6, 2) * 0.4);
+    // 3. ノイズ (Noise): ISO値が大きいほど不透明度が上がる
+    const noiseOpacity = Math.max(0, Math.pow(Math.log2(current.isoNum / 100) / 6, 2) * 0.6);
 
     return {
       filter: `brightness(${brightness}) blur(${blur}px)`,
@@ -117,7 +125,7 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
     };
   }, [tryingPhoto, currentSS, currentF, currentISO]);
 
-  // --- [変更]: 試すモード (フルスクリーン表示) ---
+  // --- [修正]: 再編集のリアルタイム反映 - 試すモード (フルスクリーン表示) ---
   if (tryingPhoto) {
     return (
       <div className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center">
@@ -126,16 +134,16 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
           <img 
             src={tryingPhoto.imageUrl} 
             alt="Trying photo" 
-            className="w-full h-full object-cover transition-all duration-200"
+            className="w-full h-full object-cover transition-all duration-300 ease-out"
             style={{ filter: visualEffects.filter }}
           />
           
           {/* ノイズオーバーレイ (ISOシミュレーション) */}
           <div 
-            className="absolute inset-0 pointer-events-none mix-blend-screen bg-repeat opacity-0"
+            className="absolute inset-0 pointer-events-none mix-blend-screen bg-repeat transition-opacity duration-300"
             style={{ 
               opacity: visualEffects.noiseOpacity,
-              backgroundImage: `url('https://www.transparenttextures.com/patterns/stardust.png')`, // 簡易的なノイズテクスチャ
+              backgroundImage: `url('https://www.transparenttextures.com/patterns/stardust.png')`,
               backgroundSize: '200px 200px'
             }}
           />
@@ -165,36 +173,42 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
-        <div className="grid grid-cols-3 gap-2 md:gap-3">
-          {galleryData.map((photo, index) => (
-            <div 
-              key={photo?.id || `empty-${index}`}
-              className="relative aspect-square rounded-lg overflow-hidden group cursor-pointer border border-gray-800/50"
-              onClick={() => photo && setSelectedPhotoForPopup(photo)}
-            >
-              {photo ? (
-                <>
-                  <img 
-                    src={photo.imageUrl} 
-                    alt={`Photo ${photo.id}`} 
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
-                    <span className="text-[9px] text-white font-mono leading-none">
-                      {photo.settings.ss} · {photo.settings.f}
+        {isLoading && posts.length === 0 ? (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-2 md:gap-3">
+            {posts.map((photo, index) => (
+              <div 
+                key={photo?.id || `empty-${index}`}
+                className="relative aspect-square rounded-lg overflow-hidden group cursor-pointer border border-gray-800/50"
+                onClick={() => photo && setSelectedPhotoForPopup(photo)}
+              >
+                {photo ? (
+                  <>
+                    <img 
+                      src={photo.imageUrl} 
+                      alt={`Photo ${photo.id}`} 
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
+                      <span className="text-[9px] text-white font-mono leading-none">
+                        {photo.settings.ss} · {photo.settings.f}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="w-full h-full bg-gray-900/30 flex items-center justify-center border border-dashed border-gray-800">
+                    <span className="material-symbols-outlined text-gray-800 text-xl select-none">
+                      add_a_photo
                     </span>
                   </div>
-                </>
-              ) : (
-                <div className="w-full h-full bg-gray-900/30 flex items-center justify-center border border-dashed border-gray-800">
-                  <span className="material-symbols-outlined text-gray-800 text-xl select-none">
-                    add_a_photo
-                  </span>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* [変更]: ポップアップ (モーダル) 実装 */}
@@ -208,7 +222,7 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
             onClick={(e) => e.stopPropagation()}
           >
             {/* サムネイル */}
-            <div className="w-full aspect-video overflow-hidden">
+            <div className="w-full aspect-video overflow-hidden relative">
               <img 
                 src={selectedPhotoForPopup.imageUrl} 
                 alt="Selected" 
@@ -232,6 +246,14 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({
                 </button>
                 <button 
                   onClick={() => {
+                    if (onSettingsChange) {
+                      const numericSettings = parseSettings(selectedPhotoForPopup.settings);
+                      onSettingsChange({
+                        ss: numericSettings.ssNum,
+                        f: numericSettings.fNum,
+                        iso: numericSettings.isoNum
+                      });
+                    }
                     setTryingPhoto(selectedPhotoForPopup);
                     setSelectedPhotoForPopup(null);
                   }}

@@ -260,6 +260,11 @@ const CameraView: React.FC = () => {
 							currentF={currentF}
 							currentISO={currentISO}
 							onTryModeChange={(isTrying) => setIsTryingMode(isTrying)}
+							onSettingsChange={(newSettings) => {
+								setShutterSpeed(newSettings.ss);
+								setAperture(newSettings.f);
+								setIso(newSettings.iso);
+							}}
 						/>
 					)}
 
